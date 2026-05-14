@@ -6,7 +6,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from app.core.config import AppConfig
+from app.core.config import AppConfig, proxy_env
 
 
 class StreamResolver:
@@ -31,6 +31,7 @@ class StreamResolver:
             quality or self.config.input.quality,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
+            env=proxy_env(self.config),
         )
         stdout, stderr = await proc.communicate()
         if proc.returncode != 0:
@@ -42,6 +43,7 @@ class HLSBuffer:
     def __init__(self, config: AppConfig) -> None:
         self.config = config
         self.process: subprocess.Popen | None = None
+        self.last_error: str | None = None
 
     def start(self, source_url: str) -> None:
         if not shutil.which("ffmpeg"):
@@ -49,6 +51,7 @@ class HLSBuffer:
 
         hls_dir = Path(self.config.runtime.hls_dir)
         hls_dir.mkdir(parents=True, exist_ok=True)
+        self.clear()
         index = hls_dir / "index.m3u8"
         segment = hls_dir / "seg_%06d.ts"
         video_args = ["-c:v", "copy"] if self.config.video.prefer_copy else [
@@ -96,19 +99,41 @@ class HLSBuffer:
             str(index),
         ]
         self.stop()
-        self.process = subprocess.Popen(command, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+        self.last_error = None
+        self.process = subprocess.Popen(
+            command,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.PIPE,
+            env=proxy_env(self.config),
+        )
 
     def stop(self) -> None:
         if self.process and self.process.poll() is None:
             self.process.terminate()
         self.process = None
 
+    def clear(self) -> None:
+        hls_dir = Path(self.config.runtime.hls_dir)
+        for item in hls_dir.glob("*"):
+            if item.name == ".gitkeep":
+                continue
+            if item.is_file():
+                item.unlink(missing_ok=True)
+
     def status(self) -> dict:
         index = Path(self.config.runtime.hls_dir) / "index.m3u8"
+        running = self.process is not None and self.process.poll() is None
+        if self.process is not None and not running and self.process.stderr and self.last_error is None:
+            try:
+                error_text = self.process.stderr.read().decode("utf-8", errors="ignore").strip()
+                self.last_error = error_text[-1200:] if error_text else None
+            except Exception:
+                self.last_error = "Unable to read FFmpeg error output"
         return {
-            "running": self.process is not None and self.process.poll() is None,
+            "running": running,
             "playlist_exists": index.exists(),
             "playlist": "/hls/index.m3u8",
+            "last_error": self.last_error,
         }
 
 
@@ -140,6 +165,7 @@ class AudioExtractor:
             ],
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
+            env=proxy_env(self.config),
         )
         return self.process
 

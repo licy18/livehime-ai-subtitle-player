@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Literal
 
+import os
 import yaml
 from pydantic import BaseModel, Field
 
@@ -18,6 +19,11 @@ class InputConfig(BaseModel):
     quality: str = "best"
 
 
+class NetworkConfig(BaseModel):
+    proxy_enabled: bool = False
+    proxy_url: str = "http://127.0.0.1:7897"
+
+
 class VideoConfig(BaseModel):
     delay_seconds: float = 15.0
     hls_time: int = 1
@@ -30,6 +36,10 @@ class SubtitleConfig(BaseModel):
     hold_seconds_after_speech: float = 1.2
     max_chars_per_line: int = 24
     max_lines: int = 2
+    bottom_percent: float = 18.0
+    font_size_px: int = 42
+    min_display_seconds: float = 1.5
+    max_display_seconds: float = 8.0
 
 
 class ASRConfig(BaseModel):
@@ -76,6 +86,7 @@ class RuntimeConfig(BaseModel):
 class AppConfig(BaseModel):
     server: ServerConfig = Field(default_factory=ServerConfig)
     input: InputConfig = Field(default_factory=InputConfig)
+    network: NetworkConfig = Field(default_factory=NetworkConfig)
     video: VideoConfig = Field(default_factory=VideoConfig)
     subtitle: SubtitleConfig = Field(default_factory=SubtitleConfig)
     asr: ASRConfig = Field(default_factory=ASRConfig)
@@ -101,13 +112,52 @@ def load_config(path: str | Path = "config.yaml") -> AppConfig:
     return config
 
 
+def save_config(config: AppConfig, path: str | Path = "config.yaml") -> None:
+    config_path = Path(path)
+    payload = config.model_dump(mode="json")
+    with config_path.open("w", encoding="utf-8") as fh:
+        yaml.safe_dump(payload, fh, allow_unicode=True, sort_keys=False)
+
+
+def proxy_env(config: AppConfig) -> dict[str, str]:
+    env = os.environ.copy()
+    if config.network.proxy_enabled and config.network.proxy_url.strip():
+        proxy = config.network.proxy_url.strip()
+        env["HTTP_PROXY"] = proxy
+        env["HTTPS_PROXY"] = proxy
+        env["ALL_PROXY"] = proxy
+        env["http_proxy"] = proxy
+        env["https_proxy"] = proxy
+        env["all_proxy"] = proxy
+    return env
+
+
+def httpx_proxy(config: AppConfig) -> str | None:
+    if config.network.proxy_enabled and config.network.proxy_url.strip():
+        return config.network.proxy_url.strip()
+    return None
+
+
 def public_config(config: AppConfig) -> dict:
     return {
+        "input": {
+            "url": config.input.url,
+            "resolver": config.input.resolver,
+            "quality": config.input.quality,
+        },
+        "network": {
+            "proxy_enabled": config.network.proxy_enabled,
+            "proxy_url": config.network.proxy_url,
+        },
         "video": {"delay_seconds": config.video.delay_seconds},
         "subtitle": {
             "extra_offset_seconds": config.subtitle.extra_offset_seconds,
             "max_chars_per_line": config.subtitle.max_chars_per_line,
             "max_lines": config.subtitle.max_lines,
+            "bottom_percent": config.subtitle.bottom_percent,
+            "font_size_px": config.subtitle.font_size_px,
+            "min_display_seconds": config.subtitle.min_display_seconds,
+            "max_display_seconds": config.subtitle.max_display_seconds,
         },
         "asr": {
             "enabled": config.asr.enabled,
@@ -121,4 +171,3 @@ def public_config(config: AppConfig) -> dict:
         },
         "glossary": {"game_id": config.glossary.game_id},
     }
-

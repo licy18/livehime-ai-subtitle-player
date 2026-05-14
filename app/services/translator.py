@@ -9,7 +9,7 @@ from typing import Any
 
 import httpx
 
-from app.core.config import AppConfig
+from app.core.config import AppConfig, httpx_proxy
 from app.models.subtitle import TranslationResult
 from app.models.term import Term
 
@@ -75,7 +75,10 @@ class DeepSeekV4Translator(Translator):
 
         for _ in range(self.deepseek.retries + 1):
             try:
-                async with httpx.AsyncClient(timeout=self.deepseek.timeout_seconds) as client:
+                async with httpx.AsyncClient(
+                    timeout=self.deepseek.timeout_seconds,
+                    proxy=httpx_proxy(self.config),
+                ) as client:
                     response = await client.post(
                         url,
                         headers={"Authorization": f"Bearer {api_key}", "Content-Type": "application/json"},
@@ -176,4 +179,3 @@ def parse_translation_json(content: str) -> dict:
 
 def _case_insensitive_replace(text: str, old: str, new: str) -> str:
     return re.sub(re.escape(old), new, text, flags=re.IGNORECASE)
-

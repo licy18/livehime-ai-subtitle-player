@@ -8,6 +8,7 @@ from uuid import uuid4
 import httpx
 import yaml
 
+from app.core.config import AppConfig, httpx_proxy
 from app.models.term import Term
 from app.services.translator import Translator
 
@@ -22,8 +23,9 @@ class GlossaryJob:
 
 
 class GlossaryBuilder:
-    def __init__(self, translator: Translator | None = None) -> None:
+    def __init__(self, translator: Translator | None = None, config: AppConfig | None = None) -> None:
         self.translator = translator
+        self.config = config
         self.jobs: dict[str, GlossaryJob] = {}
 
     async def create_job(self, request: dict) -> GlossaryJob:
@@ -70,7 +72,10 @@ class GlossaryBuilder:
                 if not url.startswith(("http://", "https://")):
                     job.warnings.append(f"Skipped invalid URL: {url}")
                     continue
-                async with httpx.AsyncClient(timeout=10) as client:
+                async with httpx.AsyncClient(
+                    timeout=10,
+                    proxy=httpx_proxy(self.config) if self.config else None,
+                ) as client:
                     response = await client.get(url)
                     response.raise_for_status()
                     chunks.append(response.text)
@@ -113,4 +118,3 @@ class GlossaryBuilder:
                         ),
                     )
         return list(terms.values())
-

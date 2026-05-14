@@ -23,8 +23,9 @@ class SubtitleScheduler:
         show_at = transcript.start_monotonic + self.video.delay_seconds + self.subtitle.extra_offset_seconds
         hide_at = max(
             transcript.end_monotonic + self.video.delay_seconds + self.subtitle.hold_seconds_after_speech,
-            show_at + 1.5,
+            show_at + self.subtitle.min_display_seconds,
         )
+        hide_at = min(hide_at, show_at + self.subtitle.max_display_seconds)
         return SubtitleEvent(
             id=str(uuid4()),
             show_at=show_at,
@@ -45,4 +46,3 @@ class SubtitleScheduler:
             return clean
         lines = textwrap.wrap(clean, width=self.subtitle.max_chars_per_line, break_long_words=False)
         return "\n".join(lines[: self.subtitle.max_lines])
-

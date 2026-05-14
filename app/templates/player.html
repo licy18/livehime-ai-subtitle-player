@@ -22,7 +22,73 @@
           <button id="mock-subtitle">Mock Subtitle</button>
           <button id="mock-loop">Mock Loop</button>
         </div>
+        <section class="config-panel">
+          <h2>Config</h2>
+          <form id="config-form">
+            <div class="form-row">
+              <label>Input URL<input name="input.url" placeholder="Local file path or stream URL" /></label>
+            </div>
+            <div class="config-grid">
+              <label>Resolver
+                <select name="input.resolver">
+                  <option value="direct">direct</option>
+                  <option value="streamlink">streamlink</option>
+                </select>
+              </label>
+              <label>Quality<input name="input.quality" /></label>
+              <label>Proxy
+                <select name="network.proxy_enabled">
+                  <option value="false">off</option>
+                  <option value="true">on</option>
+                </select>
+              </label>
+              <label>Proxy URL<input name="network.proxy_url" placeholder="http://127.0.0.1:7897" /></label>
+              <label>Delay<input name="video.delay_seconds" type="number" step="0.1" /></label>
+              <label>Subtitle Offset<input name="subtitle.extra_offset_seconds" type="number" step="0.1" /></label>
+              <label>Subtitle Bottom %<input name="subtitle.bottom_percent" type="number" step="1" min="0" max="45" /></label>
+              <label>Subtitle Font<input name="subtitle.font_size_px" type="number" step="1" min="20" max="96" /></label>
+              <label>Min Display<input name="subtitle.min_display_seconds" type="number" step="0.1" min="0.5" /></label>
+              <label>Max Display<input name="subtitle.max_display_seconds" type="number" step="0.1" min="1" /></label>
+              <label>ASR
+                <select name="asr.provider">
+                  <option value="mock">mock</option>
+                  <option value="faster_whisper">faster_whisper</option>
+                </select>
+              </label>
+              <label>ASR Model<input name="asr.model" /></label>
+              <label>Device
+                <select name="asr.device">
+                  <option value="cpu">cpu</option>
+                  <option value="cuda">cuda</option>
+                </select>
+              </label>
+              <label>Compute<input name="asr.compute_type" /></label>
+              <label>Beam<input name="asr.beam_size" type="number" step="1" min="1" /></label>
+              <label>Language<input name="asr.language" placeholder="auto" /></label>
+              <label>Translation
+                <select name="translation.provider">
+                  <option value="mock">mock</option>
+                  <option value="deepseek_v4">deepseek_v4</option>
+                </select>
+              </label>
+              <label>DeepSeek Model<input name="translation.deepseek_v4.model" /></label>
+            </div>
+            <div class="toolbar">
+              <button id="save-restart" type="submit">Save & Restart</button>
+              <button id="reload-config" type="button">Reload Config</button>
+            </div>
+            <div id="config-message" class="inline-message"></div>
+          </form>
+        </section>
+        <section class="config-panel">
+          <h2>Diagnostics</h2>
+          <div class="toolbar">
+            <button id="run-diagnostics" type="button">Run Diagnostics</button>
+          </div>
+          <pre id="diagnostics-output" class="diagnostics-output"></pre>
+        </section>
         <div class="status-list">
+          <div><span>Input</span><strong id="input-status">-</strong></div>
           <div><span>WebSocket</span><strong id="ws-status">connecting</strong></div>
           <div><span>HLS</span><strong id="hls-status">waiting</strong></div>
           <div><span>ASR</span><strong id="asr-status">waiting</strong></div>

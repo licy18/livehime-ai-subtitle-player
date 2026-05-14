@@ -1,15 +1,21 @@
 from __future__ import annotations
 
 import argparse
+import os
 from pathlib import Path
+import subprocess
+import sys
+import threading
+import time
 
 import uvicorn
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
-from app.core.config import AppConfig, load_config, public_config
+from app.core.config import AppConfig, load_config, public_config, save_config
 from app.models.term import Term
+from app.services.diagnostics import run_diagnostics
 from app.services.glossary_builder import GlossaryBuilder
 from app.services.pipeline import RuntimePipeline
 from app.services.terminology_manager import TerminologyManager
@@ -17,16 +23,17 @@ from app.services.translator import create_translator
 from app.services.websocket_manager import WebSocketManager
 
 
-def create_app(config: AppConfig | None = None) -> FastAPI:
+def create_app(config: AppConfig | None = None, config_path: str | Path = "config.yaml") -> FastAPI:
     app_config = config or load_config()
     terminology = TerminologyManager(app_config)
     translator = create_translator(app_config)
     websocket_manager = WebSocketManager()
     pipeline = RuntimePipeline(app_config, terminology, translator, websocket_manager)
-    glossary_builder = GlossaryBuilder(translator)
+    glossary_builder = GlossaryBuilder(translator, app_config)
 
     app = FastAPI(title="LiveHime AI Subtitle Player", version="0.1.0")
     app.state.config = app_config
+    app.state.config_path = Path(config_path)
     app.state.terminology = terminology
     app.state.pipeline = pipeline
     app.state.glossary_builder = glossary_builder
@@ -65,6 +72,10 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
     async def status() -> dict:
         return pipeline.status()
 
+    @app.get("/api/diagnostics")
+    async def diagnostics() -> dict:
+        return await run_diagnostics(app_config)
+
     @app.get("/api/time")
     async def server_time() -> dict:
         import time
@@ -74,6 +85,33 @@ def create_app(config: AppConfig | None = None) -> FastAPI:
     @app.get("/api/config/public")
     async def config_public() -> dict:
         return public_config(app_config)
+
+    @app.get("/api/config")
+    async def get_config() -> dict:
+        return app_config.model_dump(mode="json")
+
+    @app.put("/api/config")
+    async def put_config(payload: dict) -> dict:
+        nonlocal app_config
+        try:
+            updated = AppConfig.model_validate(payload)
+        except Exception as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        save_config(updated, app.state.config_path)
+        app_config = updated
+        app.state.config = updated
+        return updated.model_dump(mode="json")
+
+    @app.post("/api/runtime/save-config-and-restart")
+    async def save_config_and_restart(payload: dict) -> dict:
+        try:
+            updated = AppConfig.model_validate(payload)
+        except Exception as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        save_config(updated, app.state.config_path)
+        pipeline.stop()
+        _restart_after_response(app.state.config_path)
+        return {"ok": True, "message": "Configuration saved. Backend restarting."}
 
     @app.post("/api/runtime/start-hls")
     async def start_hls() -> dict:
@@ -204,7 +242,39 @@ def main() -> None:
     parser.add_argument("--config", default="config.yaml")
     args = parser.parse_args()
     config = load_config(args.config)
-    uvicorn.run(create_app(config), host=config.server.host, port=config.server.port)
+    uvicorn.run(create_app(config, args.config), host=config.server.host, port=config.server.port)
+
+
+def _restart_after_response(config_path: Path) -> None:
+    def restart() -> None:
+        time.sleep(0.2)
+        cwd = Path.cwd()
+        resolved_config = config_path if config_path.is_absolute() else cwd / config_path
+        if os.name == "nt":
+            command = (
+                "Start-Sleep -Milliseconds 1200; "
+                f"Set-Location -LiteralPath '{_escape_powershell(cwd)}'; "
+                f"& '{_escape_powershell(Path(sys.executable))}' -m app.main --config '{_escape_powershell(resolved_config)}'"
+            )
+            subprocess.Popen(
+                ["powershell", "-NoProfile", "-WindowStyle", "Hidden", "-Command", command],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                creationflags=subprocess.CREATE_NEW_PROCESS_GROUP,
+            )
+        else:
+            subprocess.Popen(
+                ["sh", "-c", f"sleep 1.2; cd '{cwd}'; '{sys.executable}' -m app.main --config '{resolved_config}'"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        os._exit(0)
+
+    threading.Thread(target=restart, daemon=True).start()
+
+
+def _escape_powershell(value: Path | str) -> str:
+    return str(value).replace("'", "''")
 
 
 if __name__ == "__main__":

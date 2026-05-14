@@ -26,3 +26,18 @@ def test_scheduler_splits_long_subtitles():
 
     assert scheduler.split_lines("hello world again") == "hello\nworld"
 
+
+def test_scheduler_caps_display_duration():
+    scheduler = SubtitleScheduler(
+        VideoConfig(delay_seconds=10),
+        SubtitleConfig(min_display_seconds=1.5, max_display_seconds=3, hold_seconds_after_speech=10),
+    )
+    event = scheduler.schedule(
+        TranscriptSegment(id="seg-1", source_text="hello", start_monotonic=0, end_monotonic=1),
+        "hello",
+        TranslationResult(zh="你好"),
+        VerificationResult(text="你好", actions=[]),
+    )
+
+    assert event.show_at == 10
+    assert event.hide_at == 13
