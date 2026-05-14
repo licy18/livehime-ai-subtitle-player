@@ -1,0 +1,39 @@
+game_id: example_game
+zh_cn_title: "蓝色星原：旅谣"
+terms:
+  - id: game.example_game.title
+    category: game_title
+    source:
+      - Azur Promilia
+    aliases:
+      - Azure Promilia
+      - Azure Familiar
+    zh_cn: "蓝色星原：旅谣"
+    notes: "官方简中游戏名，禁止音译。"
+    priority: 100
+    forbidden_translations:
+      - 阿祖尔普罗米利亚
+      - 蓝色普罗米利亚
+    asr_mishearings:
+      - Azure Familiar
+  - id: character.example_game.noa
+    category: character
+    source:
+      - Noa
+    aliases:
+      - Noah
+    zh_cn: "诺亚"
+    priority: 50
+    forbidden_translations: []
+    asr_mishearings: []
+  - id: item.example_game.starstone
+    category: item
+    source:
+      - Starstone
+    aliases:
+      - Star Stone
+    zh_cn: "星石"
+    priority: 30
+    forbidden_translations: []
+    asr_mishearings: []
+

@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Glossary Builder</title>
+    <link rel="stylesheet" href="/static/css/app.css" />
+  </head>
+  <body>
+    <main class="page">
+      <h1>Glossary Builder</h1>
+      <div class="grid">
+        <section class="card">
+          <form id="builder-form">
+            <div class="form-row"><label>Game ID<input name="game_id" required value="example_game" /></label></div>
+            <div class="form-row"><label>简中标题<input name="zh_cn_title" required value="蓝色星原：旅谣" /></label></div>
+            <div class="form-row">
+              <label>Source Type
+                <select name="source_type">
+                  <option value="text">Text</option>
+                  <option value="csv">CSV</option>
+                  <option value="json">JSON</option>
+                  <option value="markdown">Markdown</option>
+                  <option value="url">URL</option>
+                </select>
+              </label>
+            </div>
+            <div class="form-row"><label>Source<textarea name="content" placeholder="Paste official material or URL"></textarea></label></div>
+            <button type="submit">Generate Draft</button>
+          </form>
+        </section>
+        <section class="card">
+          <pre id="builder-output"></pre>
+        </section>
+      </div>
+    </main>
+    <script src="/static/js/glossary_builder.js"></script>
+  </body>
+</html>
+

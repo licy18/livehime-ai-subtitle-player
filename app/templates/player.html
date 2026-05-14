@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>LiveHime AI Subtitle Player</title>
+    <link rel="stylesheet" href="/static/css/app.css" />
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="stage">
+        <video id="video" controls autoplay muted></video>
+        <div id="subtitle"></div>
+      </section>
+      <aside class="panel">
+        <h1>LiveHime AI Subtitle Player</h1>
+        <div class="toolbar">
+          <button id="start-hls">Start HLS</button>
+          <button id="start-asr">Start ASR</button>
+          <button id="stop-runtime">Stop</button>
+          <button id="mock-subtitle">Mock Subtitle</button>
+          <button id="mock-loop">Mock Loop</button>
+        </div>
+        <div class="status-list">
+          <div><span>WebSocket</span><strong id="ws-status">connecting</strong></div>
+          <div><span>HLS</span><strong id="hls-status">waiting</strong></div>
+          <div><span>ASR</span><strong id="asr-status">waiting</strong></div>
+          <div><span>Delay</span><strong id="delay-status">-</strong></div>
+          <div><span>Terms</span><strong id="terms-status">-</strong></div>
+          <div><span>ASR Latency</span><strong id="asr-latency-status">-</strong></div>
+          <div><span>Translate Latency</span><strong id="translation-latency-status">-</strong></div>
+          <div><span>Terms Hit</span><strong id="terms-hit-status">-</strong></div>
+          <div><span>Error</span><strong id="error-status">-</strong></div>
+        </div>
+        <div id="source-log" class="subtitle-log"></div>
+        <div id="subtitle-log" class="subtitle-log"></div>
+      </aside>
+    </main>
+    <script src="/static/js/player.js"></script>
+  </body>
+</html>

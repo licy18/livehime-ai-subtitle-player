@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Live Terms</title>
+    <link rel="stylesheet" href="/static/css/app.css" />
+  </head>
+  <body>
+    <main class="page">
+      <h1>Live Terms</h1>
+      <div class="grid">
+        <section class="card">
+          <form id="term-form">
+            <div class="form-row"><label>ID<input name="id" required placeholder="game.example.title" /></label></div>
+            <div class="form-row"><label>Category<input name="category" required value="game_title" /></label></div>
+            <div class="form-row"><label>Source<input name="source" required placeholder="Azur Promilia" /></label></div>
+            <div class="form-row"><label>Aliases<input name="aliases" placeholder="Azure Familiar, Azure Promilia" /></label></div>
+            <div class="form-row"><label>简中名<input name="zh_cn" required placeholder="蓝色星原：旅谣" /></label></div>
+            <div class="form-row"><label>Priority<input name="priority" type="number" value="100" /></label></div>
+            <div class="form-row"><label>Forbidden<input name="forbidden_translations" placeholder="阿祖尔普罗米利亚" /></label></div>
+            <div class="form-row"><label>ASR Mishearings<input name="asr_mishearings" placeholder="Azure Familiar" /></label></div>
+            <button type="submit">Save Term</button>
+          </form>
+        </section>
+        <section class="card">
+          <div class="toolbar"><button id="reload">Reload YAML</button></div>
+          <table>
+            <thead><tr><th>ID</th><th>Category</th><th>Source</th><th>简中</th><th></th></tr></thead>
+            <tbody id="terms-body"></tbody>
+          </table>
+        </section>
+      </div>
+    </main>
+    <script src="/static/js/live_terms.js"></script>
+  </body>
+</html>
+

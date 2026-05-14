@@ -1,0 +1,13 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+venv/
+config.yaml
+app/runtime/*
+!app/runtime/.gitkeep
+!app/runtime/hls/
+app/runtime/hls/*
+!app/runtime/hls/.gitkeep
+

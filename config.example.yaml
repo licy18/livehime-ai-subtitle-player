@@ -1,0 +1,71 @@
+server:
+  host: "127.0.0.1"
+  port: 8765
+
+input:
+  url: "tests/assets/sample.mp4"
+  resolver: "direct"
+  quality: "best"
+
+video:
+  delay_seconds: 15
+  hls_time: 1
+  hls_list_size: 120
+  prefer_copy: true
+
+subtitle:
+  extra_offset_seconds: 0
+  hold_seconds_after_speech: 1.2
+  max_chars_per_line: 24
+  max_lines: 2
+
+asr:
+  enabled: true
+  provider: "mock"
+  model: "small"
+  device: "cpu"
+  compute_type: "int8"
+  beam_size: 1
+  language: null
+  initial_prompt_terms: 80
+
+# Low-end CPU example:
+# asr:
+#   provider: "faster_whisper"
+#   model: "small"
+#   device: "cpu"
+#   compute_type: "int8"
+#   beam_size: 1
+#
+# NVIDIA GPU example:
+# asr:
+#   provider: "faster_whisper"
+#   model: "large-v3"
+#   device: "cuda"
+#   compute_type: "float16"
+#   beam_size: 1
+
+translation:
+  provider: "mock"
+  target_language: "zh-CN"
+  repair_strategy: "rule_only"
+  deepseek_v4:
+    base_url: "https://api.deepseek.com"
+    model: "deepseek-v4-flash"
+    timeout_seconds: 8
+    retries: 1
+    temperature: 0.1
+    max_tokens: 512
+
+glossary:
+  game_id: "example_game"
+  paths:
+    - "glossaries/*.yaml"
+  fuzzy_threshold: 86
+  max_candidate_terms: 20
+
+runtime:
+  runtime_dir: "app/runtime"
+  hls_dir: "app/runtime/hls"
+  live_terms_db: "app/runtime/live_terms.sqlite3"
+  unknown_terms_log: "app/runtime/unknown_terms.log"
