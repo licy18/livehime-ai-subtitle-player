@@ -1,5 +1,5 @@
 from app.models.term import Term
-from app.services.translation_verifier import TranslationVerifier
+from app.services.translation_verifier import TranslationVerifier, contains_untranslated_foreign_script
 
 
 def test_verifier_replaces_forbidden_translation():
@@ -27,3 +27,26 @@ def test_verifier_inserts_required_term_when_missing():
     assert result.text.startswith("蓝色星原：旅谣")
     assert result.missing_terms[0].id == "game.example.title"
 
+
+def test_verifier_replaces_non_chinese_translation():
+    verifier = TranslationVerifier()
+
+    result = verifier.verify("근데 얘가 뭐라고 했나?", "근데 얘가 뭐라고 했나?", "근데 얘가 뭐라고 했나?", [])
+
+    assert result.text == "（翻译未返回中文）"
+    assert "non_chinese_translation_replaced" in result.actions
+
+
+def test_verifier_replaces_english_fallback_translation():
+    verifier = TranslationVerifier()
+
+    result = verifier.verify("hello world", "hello world", "hello world", [])
+
+    assert result.text == "（翻译未返回中文）"
+    assert "non_chinese_translation_replaced" in result.actions
+
+
+def test_foreign_script_detection_allows_chinese():
+    assert contains_untranslated_foreign_script("我感觉这个角色很可爱") is False
+    assert contains_untranslated_foreign_script("근데 얘가 뭐라고 했나?") is True
+    assert contains_untranslated_foreign_script("お下げる儀式です") is True

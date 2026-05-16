@@ -63,10 +63,29 @@ button:hover {
   text-align: center;
   white-space: pre-line;
   font-size: 42px;
-  line-height: 1.35;
+  line-height: 1.25;
   color: white;
-  text-shadow: -3px -3px 0 #000, 3px -3px 0 #000, -3px 3px 0 #000, 3px 3px 0 #000, 0 0 8px #000;
   pointer-events: none;
+}
+
+.subtitle-main,
+.subtitle-source {
+  display: block;
+  overflow-wrap: anywhere;
+  text-shadow: -3px -3px 0 #000, 3px -3px 0 #000, -3px 3px 0 #000, 3px 3px 0 #000, 0 0 8px #000;
+}
+
+.subtitle-main {
+  font-weight: 700;
+}
+
+.subtitle-source {
+  margin-top: 4px;
+  font-size: 0.48em;
+  line-height: 1.25;
+  font-weight: 500;
+  color: #dce8f6;
+  opacity: 0.96;
 }
 
 .panel {
@@ -92,6 +111,11 @@ button:hover {
   display: grid;
   gap: 10px;
   font-size: 14px;
+}
+
+.status-list.compact {
+  gap: 7px;
+  font-size: 12px;
 }
 
 .status-list div {
@@ -149,6 +173,72 @@ button:hover {
   font-size: 12px;
   line-height: 1.45;
   color: #dce8f6;
+}
+
+.panel-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.panel-title-row h2 {
+  margin: 0;
+}
+
+.history-list {
+  display: grid;
+  gap: 10px;
+  max-height: 420px;
+  overflow: auto;
+}
+
+.history-item {
+  padding: 10px;
+  border: 1px solid #273443;
+  border-radius: 6px;
+  background: #0d1117;
+}
+
+.history-item.has-error {
+  border-color: #8c524f;
+}
+
+.history-text {
+  font-size: 14px;
+  line-height: 1.45;
+  color: #f4f7fb;
+}
+
+.history-source {
+  margin-top: 6px;
+  font-size: 12px;
+  line-height: 1.35;
+  color: #aebccc;
+}
+
+.history-meta {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 8px;
+  font-size: 11px;
+  color: #8fa4ba;
+}
+
+.error-chip {
+  color: #ffc7bd;
+}
+
+.mini-toolbar {
+  margin: 8px 0 0;
+  gap: 6px;
+}
+
+.mini-toolbar button {
+  padding: 5px 7px;
+  font-size: 11px;
 }
 
 .page {

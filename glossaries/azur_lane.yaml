@@ -1,0 +1,819 @@
+game_id: azur_lane
+zh_cn_title: "碧蓝航线"
+source_urls:
+  - "https://wiki.biligame.com/blhx/"
+  - "https://wiki.biligame.com/blhx/舰船图鉴"
+  - "https://wiki.biligame.com/blhx/舰船名称对照表"
+  - "https://wiki.biligame.com/blhx/昵称术语查询"
+  - "https://wiki.biligame.com/blhx/阵营"
+notes: "source 优先放日文/英文等源语言触发词；zh_cn 放官方简中名；中文昵称只作为别名或禁用错译。"
+terms:
+  - id: game.azur_lane.title
+    category: game_title
+    source: ["アズールレーン", "Azur Lane"]
+    aliases: ["碧蓝航线", "碧蓝", "舰B", "舰b"]
+    zh_cn: "碧蓝航线"
+    priority: 100
+    forbidden_translations: ["蓝色航线", "蔚蓝航线", "天青车道", "Azur Lane"]
+    asr_mishearings: ["アズレン", "アズール レーン", "azure lane"]
+
+  - id: role.azur_lane.commander
+    category: role
+    source: ["指揮官", "しきかん", "Commander"]
+    aliases: ["指挥官", "玩家"]
+    zh_cn: "指挥官"
+    priority: 95
+    forbidden_translations: ["司令官", "提督"]
+    asr_mishearings: ["しかかん", "しきがん"]
+
+  - id: role.azur_lane.kansen
+    category: role
+    source: ["KAN-SEN", "カンセン", "艦船"]
+    aliases: ["舰船", "舰娘", "shipgirl", "ship girl"]
+    zh_cn: "舰船"
+    priority: 90
+    forbidden_translations: ["船女孩", "舰女"]
+    asr_mishearings: []
+
+  - id: faction.azur_lane.azur_lane
+    category: faction
+    source: ["アズールレーン", "Azur Lane"]
+    aliases: ["碧蓝航线阵营"]
+    zh_cn: "碧蓝航线"
+    priority: 90
+    forbidden_translations: ["蓝色航线阵营"]
+    asr_mishearings: []
+
+  - id: faction.azur_lane.crimson_axis
+    category: faction
+    source: ["レッドアクシズ", "Crimson Axis"]
+    aliases: ["赤色中轴", "赤轴"]
+    zh_cn: "赤色中轴"
+    priority: 90
+    forbidden_translations: ["红色轴心", "深红轴心"]
+    asr_mishearings: []
+
+  - id: faction.azur_lane.siren
+    category: faction
+    source: ["セイレーン", "Siren", "Sirens"]
+    aliases: ["塞壬", "赛壬"]
+    zh_cn: "塞壬"
+    priority: 90
+    forbidden_translations: ["海妖", "警笛"]
+    asr_mishearings: ["セーレン", "せいれん"]
+
+  - id: faction.azur_lane.meta
+    category: faction
+    source: ["META", "メタ"]
+    aliases: ["META阵营"]
+    zh_cn: "META"
+    priority: 85
+    forbidden_translations: ["元", "梅塔"]
+    asr_mishearings: []
+
+  - id: faction.azur_lane.eagle_union
+    category: faction
+    source: ["ユニオン", "Eagle Union", "USS"]
+    aliases: ["白鹰", "白鹰联邦"]
+    zh_cn: "白鹰"
+    priority: 85
+    forbidden_translations: ["鹰联盟", "白头鹰", "美国阵营"]
+    asr_mishearings: []
+
+  - id: faction.azur_lane.royal_navy
+    category: faction
+    source: ["ロイヤル", "Royal Navy", "HMS"]
+    aliases: ["皇家", "皇家海军"]
+    zh_cn: "皇家"
+    priority: 85
+    forbidden_translations: ["英国皇家海军"]
+    asr_mishearings: []
+
+  - id: faction.azur_lane.sakura
+    category: faction
+    source: ["重桜", "じゅうおう", "Sakura Empire", "IJN"]
+    aliases: ["重樱"]
+    zh_cn: "重樱"
+    priority: 85
+    forbidden_translations: ["樱花帝国", "樱花群岛", "重硬"]
+    asr_mishearings: ["重櫻", "じゅうざくら"]
+
+  - id: faction.azur_lane.iron_blood
+    category: faction
+    source: ["鉄血", "てっけつ", "Iron Blood", "KMS"]
+    aliases: ["铁血"]
+    zh_cn: "铁血"
+    priority: 85
+    forbidden_translations: ["铁血帝国", "铁血军"]
+    asr_mishearings: []
+
+  - id: faction.azur_lane.dragon_empery
+    category: faction
+    source: ["東煌", "Dragon Empery", "ROC", "PRAN"]
+    aliases: ["东煌", "东皇"]
+    zh_cn: "东煌"
+    priority: 85
+    forbidden_translations: ["东方帝国", "东皇"]
+    asr_mishearings: ["とうこう"]
+
+  - id: faction.azur_lane.northern_parliament
+    category: faction
+    source: ["北方連合", "Northern Parliament", "SN"]
+    aliases: ["北方联合", "北联"]
+    zh_cn: "北方联合"
+    priority: 85
+    forbidden_translations: ["北方议会"]
+    asr_mishearings: []
+
+  - id: faction.azur_lane.iris_libre
+    category: faction
+    source: ["アイリス", "アイリス・リブレ", "Iris Libre", "FFNF"]
+    aliases: ["自由鸢尾"]
+    zh_cn: "自由鸢尾"
+    priority: 85
+    forbidden_translations: ["自由鸢尾教国", "鸢尾自由"]
+    asr_mishearings: []
+
+  - id: faction.azur_lane.vichya
+    category: faction
+    source: ["ヴィシア", "ヴィシア聖座", "Vichya Dominion", "MNF"]
+    aliases: ["维希教廷"]
+    zh_cn: "维希教廷"
+    priority: 85
+    forbidden_translations: ["维希圣座", "维希统治"]
+    asr_mishearings: []
+
+  - id: faction.azur_lane.sardegna
+    category: faction
+    source: ["サディア", "サディア帝国", "Sardegna Empire", "RN"]
+    aliases: ["撒丁帝国"]
+    zh_cn: "撒丁帝国"
+    priority: 80
+    forbidden_translations: ["撒丁尼亚帝国"]
+    asr_mishearings: []
+
+  - id: faction.azur_lane.tempesta
+    category: faction
+    source: ["テンペスタ", "Tempesta"]
+    aliases: ["飓风"]
+    zh_cn: "飓风"
+    priority: 75
+    forbidden_translations: ["暴风雨", "坦佩斯塔"]
+    asr_mishearings: []
+
+  - id: shiptype.azur_lane.destroyer
+    category: ship_type
+    source: ["駆逐艦", "くちくかん", "Destroyer", "DD"]
+    aliases: ["驱逐舰", "驱逐", "小学生"]
+    zh_cn: "驱逐舰"
+    priority: 65
+    forbidden_translations: ["破坏者"]
+    asr_mishearings: []
+
+  - id: shiptype.azur_lane.light_cruiser
+    category: ship_type
+    source: ["軽巡洋艦", "軽巡", "Light Cruiser", "CL"]
+    aliases: ["轻巡洋舰", "轻巡"]
+    zh_cn: "轻巡洋舰"
+    priority: 65
+    forbidden_translations: ["轻巡航舰"]
+    asr_mishearings: []
+
+  - id: shiptype.azur_lane.heavy_cruiser
+    category: ship_type
+    source: ["重巡洋艦", "重巡", "Heavy Cruiser", "CA"]
+    aliases: ["重巡洋舰", "重巡"]
+    zh_cn: "重巡洋舰"
+    priority: 65
+    forbidden_translations: ["重巡航舰"]
+    asr_mishearings: []
+
+  - id: shiptype.azur_lane.large_cruiser
+    category: ship_type
+    source: ["大型巡洋艦", "超巡", "Large Cruiser", "CB"]
+    aliases: ["大型巡洋舰", "超巡"]
+    zh_cn: "大型巡洋舰"
+    priority: 65
+    forbidden_translations: ["大巡洋舰"]
+    asr_mishearings: []
+
+  - id: shiptype.azur_lane.battlecruiser
+    category: ship_type
+    source: ["巡洋戦艦", "Battlecruiser", "BC"]
+    aliases: ["战列巡洋舰", "战巡"]
+    zh_cn: "战列巡洋舰"
+    priority: 65
+    forbidden_translations: ["战斗巡洋舰"]
+    asr_mishearings: []
+
+  - id: shiptype.azur_lane.battleship
+    category: ship_type
+    source: ["戦艦", "Battleship", "BB"]
+    aliases: ["战列舰", "战舰"]
+    zh_cn: "战列舰"
+    priority: 65
+    forbidden_translations: ["战舰"]
+    asr_mishearings: []
+
+  - id: shiptype.azur_lane.light_carrier
+    category: ship_type
+    source: ["軽空母", "Light Aircraft Carrier", "CVL"]
+    aliases: ["轻型航空母舰", "轻航", "轻母"]
+    zh_cn: "轻型航空母舰"
+    priority: 65
+    forbidden_translations: ["轻母"]
+    asr_mishearings: []
+
+  - id: shiptype.azur_lane.carrier
+    category: ship_type
+    source: ["空母", "航空母艦", "Aircraft Carrier", "CV"]
+    aliases: ["航空母舰", "航母"]
+    zh_cn: "航空母舰"
+    priority: 65
+    forbidden_translations: ["空母"]
+    asr_mishearings: []
+
+  - id: shiptype.azur_lane.submarine
+    category: ship_type
+    source: ["潜水艦", "Submarine", "SS"]
+    aliases: ["潜艇", "潜水艇"]
+    zh_cn: "潜艇"
+    priority: 65
+    forbidden_translations: ["潜水艇"]
+    asr_mishearings: []
+
+  - id: system.azur_lane.construction
+    category: system
+    source: ["建造", "けんぞう", "Construction"]
+    aliases: ["造船"]
+    zh_cn: "建造"
+    priority: 70
+    forbidden_translations: ["建筑"]
+    asr_mishearings: []
+
+  - id: system.azur_lane.sortie
+    category: system
+    source: ["出撃", "しゅつげき", "Sortie"]
+    aliases: ["出击"]
+    zh_cn: "出击"
+    priority: 65
+    forbidden_translations: ["排序"]
+    asr_mishearings: []
+
+  - id: system.azur_lane.exercise
+    category: system
+    source: ["演習", "えんしゅう", "Exercise", "PvP"]
+    aliases: ["演习"]
+    zh_cn: "演习"
+    priority: 65
+    forbidden_translations: ["练习"]
+    asr_mishearings: []
+
+  - id: system.azur_lane.operation_siren
+    category: system
+    source: ["セイレーン作戦", "Operation Siren"]
+    aliases: ["大型作战", "大世界"]
+    zh_cn: "大型作战"
+    priority: 75
+    forbidden_translations: ["塞壬作战", "行动塞壬"]
+    asr_mishearings: []
+
+  - id: system.azur_lane.war_archives
+    category: system
+    source: ["作戦履歴", "War Archives"]
+    aliases: ["作战档案"]
+    zh_cn: "作战档案"
+    priority: 65
+    forbidden_translations: ["战争档案"]
+    asr_mishearings: []
+
+  - id: system.azur_lane.commission
+    category: system
+    source: ["委託", "Commission"]
+    aliases: ["军事委托", "委托"]
+    zh_cn: "军事委托"
+    priority: 65
+    forbidden_translations: ["佣金", "委任"]
+    asr_mishearings: []
+
+  - id: system.azur_lane.retrofit
+    category: system
+    source: ["改造", "Retrofit"]
+    aliases: ["舰船改造"]
+    zh_cn: "舰船改造"
+    priority: 70
+    forbidden_translations: ["翻新", "改装"]
+    asr_mishearings: []
+
+  - id: system.azur_lane.limit_break
+    category: system
+    source: ["限界突破", "Limit Break"]
+    aliases: ["舰船突破", "突破"]
+    zh_cn: "舰船突破"
+    priority: 70
+    forbidden_translations: ["限制突破"]
+    asr_mishearings: []
+
+  - id: system.azur_lane.cognitive_awakening
+    category: system
+    source: ["認知覚醒", "Cognitive Awakening"]
+    aliases: ["认知觉醒", "觉醒"]
+    zh_cn: "认知觉醒"
+    priority: 70
+    forbidden_translations: ["认知唤醒"]
+    asr_mishearings: []
+
+  - id: system.azur_lane.dorm
+    category: system
+    source: ["寮舎", "Dorm", "Dormitory"]
+    aliases: ["后宅", "宿舍"]
+    zh_cn: "后宅"
+    priority: 65
+    forbidden_translations: ["后院", "宿舍楼"]
+    asr_mishearings: []
+
+  - id: system.azur_lane.affinity
+    category: system
+    source: ["好感度", "こうかんど", "Affinity"]
+    aliases: ["好感度", "亲密度"]
+    zh_cn: "好感度"
+    priority: 65
+    forbidden_translations: ["亲和力"]
+    asr_mishearings: []
+
+  - id: system.azur_lane.oath
+    category: system
+    source: ["ケッコン", "誓約", "Oath"]
+    aliases: ["誓约", "结婚", "戒指"]
+    zh_cn: "誓约"
+    priority: 70
+    forbidden_translations: ["宣誓", "誓言"]
+    asr_mishearings: []
+
+  - id: system.azur_lane.secretary
+    category: system
+    source: ["秘書艦", "Secretary"]
+    aliases: ["秘书舰", "秘书"]
+    zh_cn: "秘书舰"
+    priority: 65
+    forbidden_translations: ["秘书船"]
+    asr_mishearings: []
+
+  - id: system.azur_lane.meowfficer
+    category: system
+    source: ["オフニャ", "Meowfficer"]
+    aliases: ["指挥喵", "指挥猫", "喵箱"]
+    zh_cn: "指挥喵"
+    priority: 70
+    forbidden_translations: ["指挥猫"]
+    asr_mishearings: []
+
+  - id: system.azur_lane.research
+    category: system
+    source: ["科学研究", "研究", "Research"]
+    aliases: ["科研"]
+    zh_cn: "科研"
+    priority: 70
+    forbidden_translations: ["科学研究"]
+    asr_mishearings: []
+
+  - id: system.azur_lane.development_dock
+    category: system
+    source: ["開発ドック", "Development Dock", "Shipyard"]
+    aliases: ["开发船坞", "科研船"]
+    zh_cn: "开发船坞"
+    priority: 70
+    forbidden_translations: ["开发码头"]
+    asr_mishearings: []
+
+  - id: system.azur_lane.gear_lab
+    category: system
+    source: ["兵装開発", "Gear Lab"]
+    aliases: ["装备研发", "装备实验室"]
+    zh_cn: "装备研发"
+    priority: 70
+    forbidden_translations: ["齿轮实验室"]
+    asr_mishearings: []
+
+  - id: system.azur_lane.fleet_tech
+    category: system
+    source: ["艦隊技術", "Fleet Technology", "Fleet Tech"]
+    aliases: ["舰队科技"]
+    zh_cn: "舰队科技"
+    priority: 70
+    forbidden_translations: []
+    asr_mishearings: []
+
+  - id: battle.azur_lane.barrage
+    category: battle
+    source: ["弾幕", "Barrage"]
+    aliases: ["弹幕"]
+    zh_cn: "弹幕"
+    priority: 65
+    forbidden_translations: ["炮幕"]
+    asr_mishearings: []
+
+  - id: battle.azur_lane.armor_piercing
+    category: battle
+    source: ["徹甲", "徹甲弾", "Armor Piercing", "AP"]
+    aliases: ["破甲", "穿甲"]
+    zh_cn: "破甲"
+    priority: 65
+    forbidden_translations: ["装甲破坏"]
+    asr_mishearings: []
+
+  - id: battle.azur_lane.aa_gun
+    category: battle
+    source: ["対空砲", "AA Gun", "Anti-Air Gun"]
+    aliases: ["防空炮"]
+    zh_cn: "防空炮"
+    priority: 65
+    forbidden_translations: ["高射炮"]
+    asr_mishearings: []
+
+  - id: item.azur_lane.wisdom_cube
+    category: item
+    source: ["キューブ", "メンタルキューブ", "Wisdom Cube", "cube"]
+    aliases: ["心智魔方", "魔方"]
+    zh_cn: "心智魔方"
+    priority: 80
+    forbidden_translations: ["智慧方块", "立方体"]
+    asr_mishearings: []
+
+  - id: item.azur_lane.oil
+    category: item
+    source: ["燃料", "Oil"]
+    aliases: ["石油", "油"]
+    zh_cn: "石油"
+    priority: 75
+    forbidden_translations: ["燃油"]
+    asr_mishearings: []
+
+  - id: item.azur_lane.coin
+    category: item
+    source: ["資金", "Coin", "Coins"]
+    aliases: ["物资", "金币"]
+    zh_cn: "物资"
+    priority: 75
+    forbidden_translations: ["硬币", "材料"]
+    asr_mishearings: []
+
+  - id: item.azur_lane.gem
+    category: item
+    source: ["ダイヤ", "Diamond", "Gem", "Gems"]
+    aliases: ["钻石"]
+    zh_cn: "钻石"
+    priority: 75
+    forbidden_translations: ["宝石"]
+    asr_mishearings: []
+
+  - id: item.azur_lane.quick_finisher
+    category: item
+    source: ["高速建造材", "Quick Finisher"]
+    aliases: ["快速完成工具", "快建"]
+    zh_cn: "快速完成工具"
+    priority: 75
+    forbidden_translations: ["快速终结者"]
+    asr_mishearings: []
+
+  - id: item.azur_lane.cognitive_chip
+    category: item
+    source: ["メンタルユニット", "Cognitive Chip"]
+    aliases: ["认知芯片"]
+    zh_cn: "认知芯片"
+    priority: 75
+    forbidden_translations: ["认知晶片"]
+    asr_mishearings: []
+
+  - id: item.azur_lane.cognitive_array
+    category: item
+    source: ["メンタルユニットII", "Cognitive Array"]
+    aliases: ["认知阵列"]
+    zh_cn: "认知阵列"
+    priority: 75
+    forbidden_translations: []
+    asr_mishearings: []
+
+  - id: item.azur_lane.prototype_core
+    category: item
+    source: ["プロトコア", "Prototype Core"]
+    aliases: ["原型核心"]
+    zh_cn: "原型核心"
+    priority: 70
+    forbidden_translations: ["样机核心"]
+    asr_mishearings: []
+
+  - id: item.azur_lane.skill_book
+    category: item
+    source: ["教科書", "スキル教科書", "Skill Book"]
+    aliases: ["教材", "技能书"]
+    zh_cn: "教材"
+    priority: 70
+    forbidden_translations: ["课本"]
+    asr_mishearings: []
+
+  - id: rarity.azur_lane.ur
+    category: rarity
+    source: ["UR", "ウルトラレア", "Ultra Rare"]
+    aliases: ["海上传奇", "彩船"]
+    zh_cn: "海上传奇"
+    priority: 75
+    forbidden_translations: ["超稀有"]
+    asr_mishearings: []
+
+  - id: rarity.azur_lane.ssr
+    category: rarity
+    source: ["SSR", "スーパーレア", "Super Rare"]
+    aliases: ["超稀有", "金船"]
+    zh_cn: "超稀有"
+    priority: 70
+    forbidden_translations: []
+    asr_mishearings: []
+
+  - id: rarity.azur_lane.elite
+    category: rarity
+    source: ["SR", "エリート", "Elite"]
+    aliases: ["精锐", "紫船"]
+    zh_cn: "精锐"
+    priority: 65
+    forbidden_translations: ["精英"]
+    asr_mishearings: []
+
+  - id: character.azur_lane.enterprise
+    category: character
+    source: ["エンタープライズ", "Enterprise", "Big E"]
+    aliases: ["企业", "塔塔开", "ttk"]
+    zh_cn: "企业"
+    priority: 90
+    forbidden_translations: ["企业号", "公司"]
+    asr_mishearings: ["エンプラ"]
+
+  - id: character.azur_lane.belfast
+    category: character
+    source: ["ベルファスト", "Belfast"]
+    aliases: ["贝尔法斯特", "贝法", "贝爷"]
+    zh_cn: "贝尔法斯特"
+    priority: 85
+    forbidden_translations: []
+    asr_mishearings: []
+
+  - id: character.azur_lane.hood
+    category: character
+    source: ["フッド", "Hood"]
+    aliases: ["胡德"]
+    zh_cn: "胡德"
+    priority: 80
+    forbidden_translations: ["兜帽"]
+    asr_mishearings: []
+
+  - id: character.azur_lane.illustrious
+    category: character
+    source: ["イラストリアス", "Illustrious"]
+    aliases: ["光辉"]
+    zh_cn: "光辉"
+    priority: 80
+    forbidden_translations: ["光荣"]
+    asr_mishearings: []
+
+  - id: character.azur_lane.unicorn
+    category: character
+    source: ["ユニコーン", "Unicorn"]
+    aliases: ["独角兽"]
+    zh_cn: "独角兽"
+    priority: 80
+    forbidden_translations: ["独角兽号"]
+    asr_mishearings: []
+
+  - id: character.azur_lane.laffey
+    category: character
+    source: ["ラフィー", "Laffey"]
+    aliases: ["拉菲", "御三家", "主角队"]
+    zh_cn: "拉菲"
+    priority: 80
+    forbidden_translations: ["拉菲酒"]
+    asr_mishearings: []
+
+  - id: character.azur_lane.javelin
+    category: character
+    source: ["ジャベリン", "Javelin"]
+    aliases: ["标枪", "御三家", "主角队"]
+    zh_cn: "标枪"
+    priority: 80
+    forbidden_translations: ["投枪"]
+    asr_mishearings: []
+
+  - id: character.azur_lane.z23
+    category: character
+    source: ["Z23", "ニーミ", "Nimi", "Zed Twenty-three"]
+    aliases: ["Z二三", "尼米", "御三家", "主角队"]
+    zh_cn: "Z23"
+    priority: 80
+    forbidden_translations: ["Z二十三"]
+    asr_mishearings: ["ゼットにじゅうさん"]
+
+  - id: character.azur_lane.ayanami
+    category: character
+    source: ["綾波", "あやなみ", "Ayanami"]
+    aliases: ["绫波", "鬼神", "御四家", "主角队"]
+    zh_cn: "绫波"
+    priority: 80
+    forbidden_translations: []
+    asr_mishearings: []
+
+  - id: character.azur_lane.akagi
+    category: character
+    source: ["赤城", "あかぎ", "Akagi"]
+    aliases: ["赤城", "凰"]
+    zh_cn: "赤城"
+    priority: 80
+    forbidden_translations: ["红城"]
+    asr_mishearings: []
+
+  - id: character.azur_lane.kaga
+    category: character
+    source: ["加賀", "かが", "Kaga"]
+    aliases: ["加贺", "鸾"]
+    zh_cn: "加贺"
+    priority: 80
+    forbidden_translations: []
+    asr_mishearings: []
+
+  - id: character.azur_lane.amagi
+    category: character
+    source: ["天城", "あまぎ", "Amagi"]
+    aliases: ["天城"]
+    zh_cn: "天城"
+    priority: 80
+    forbidden_translations: []
+    asr_mishearings: []
+
+  - id: character.azur_lane.nagato
+    category: character
+    source: ["長門", "ながと", "Nagato"]
+    aliases: ["长门"]
+    zh_cn: "长门"
+    priority: 80
+    forbidden_translations: []
+    asr_mishearings: []
+
+  - id: character.azur_lane.shinano
+    category: character
+    source: ["信濃", "しなの", "Shinano"]
+    aliases: ["信浓"]
+    zh_cn: "信浓"
+    priority: 85
+    forbidden_translations: ["信浓号"]
+    asr_mishearings: []
+
+  - id: character.azur_lane.musashi
+    category: character
+    source: ["武蔵", "むさし", "Musashi"]
+    aliases: ["武藏"]
+    zh_cn: "武藏"
+    priority: 85
+    forbidden_translations: []
+    asr_mishearings: []
+
+  - id: character.azur_lane.taihou
+    category: character
+    source: ["大鳳", "たいほう", "Taihou", "Taiho"]
+    aliases: ["大凤"]
+    zh_cn: "大凤"
+    priority: 80
+    forbidden_translations: []
+    asr_mishearings: []
+
+  - id: character.azur_lane.bismarck
+    category: character
+    source: ["ビスマルク", "Bismarck"]
+    aliases: ["俾斯麦", "饼干"]
+    zh_cn: "俾斯麦"
+    priority: 85
+    forbidden_translations: ["比斯马克"]
+    asr_mishearings: []
+
+  - id: character.azur_lane.friedrich_der_grosse
+    category: character
+    source: ["フリードリヒ・デア・グローセ", "Friedrich der Große", "Friedrich der Grosse", "FDG"]
+    aliases: ["腓特烈大帝", "大帝", "大帝妈妈"]
+    zh_cn: "腓特烈大帝"
+    priority: 85
+    forbidden_translations: ["弗里德里希大帝"]
+    asr_mishearings: []
+
+  - id: character.azur_lane.ulrich_von_hutten
+    category: character
+    source: ["ウルリッヒ・フォン・フッテン", "Ulrich von Hutten"]
+    aliases: ["乌尔里希·冯·胡滕", "胡滕", "小妈"]
+    zh_cn: "乌尔里希·冯·胡滕"
+    priority: 85
+    forbidden_translations: ["乌尔里希冯胡滕"]
+    asr_mishearings: []
+
+  - id: character.azur_lane.new_jersey
+    category: character
+    source: ["ニュージャージー", "New Jersey", "NJ"]
+    aliases: ["新泽西", "花园"]
+    zh_cn: "新泽西"
+    priority: 85
+    forbidden_translations: ["新泽西州"]
+    asr_mishearings: []
+
+  - id: character.azur_lane.essex
+    category: character
+    source: ["エセックス", "Essex"]
+    aliases: ["埃塞克斯", "饺子"]
+    zh_cn: "埃塞克斯"
+    priority: 80
+    forbidden_translations: []
+    asr_mishearings: []
+
+  - id: character.azur_lane.yorktown
+    category: character
+    source: ["ヨークタウン", "Yorktown"]
+    aliases: ["约克城", "约太太"]
+    zh_cn: "约克城"
+    priority: 80
+    forbidden_translations: ["纽约城"]
+    asr_mishearings: []
+
+  - id: character.azur_lane.lexington
+    category: character
+    source: ["レキシントン", "Lexington"]
+    aliases: ["列克星敦", "太太", "列太太"]
+    zh_cn: "列克星敦"
+    priority: 80
+    forbidden_translations: []
+    asr_mishearings: []
+
+  - id: character.azur_lane.saratoga
+    category: character
+    source: ["サラトガ", "Saratoga"]
+    aliases: ["萨拉托加", "小加加", "小姨子"]
+    zh_cn: "萨拉托加"
+    priority: 80
+    forbidden_translations: []
+    asr_mishearings: []
+
+  - id: character.azur_lane.helena
+    category: character
+    source: ["ヘレナ", "Helena"]
+    aliases: ["海伦娜"]
+    zh_cn: "海伦娜"
+    priority: 80
+    forbidden_translations: []
+    asr_mishearings: []
+
+  - id: character.azur_lane.san_diego
+    category: character
+    source: ["サンディエゴ", "San Diego"]
+    aliases: ["圣地亚哥", "圣地亚哥改", "金坷垃", "圣姨"]
+    zh_cn: "圣地亚哥"
+    priority: 80
+    forbidden_translations: ["圣迭戈"]
+    asr_mishearings: []
+
+  - id: character.azur_lane.azuma
+    category: character
+    source: ["吾妻", "あづま", "Azuma"]
+    aliases: ["吾妻", "57"]
+    zh_cn: "吾妻"
+    priority: 80
+    forbidden_translations: ["我的妻子"]
+    asr_mishearings: []
+
+  - id: character.azur_lane.agir
+    category: character
+    source: ["エーギル", "Ägir", "Agir", "Aegir"]
+    aliases: ["埃吉尔"]
+    zh_cn: "埃吉尔"
+    priority: 80
+    forbidden_translations: ["艾吉尔"]
+    asr_mishearings: []
+
+  - id: character.azur_lane.anchorage
+    category: character
+    source: ["アンカレッジ", "Anchorage"]
+    aliases: ["安克雷奇"]
+    zh_cn: "安克雷奇"
+    priority: 80
+    forbidden_translations: ["安克雷奇市"]
+    asr_mishearings: []
+
+  - id: character.azur_lane.plymouth
+    category: character
+    source: ["プリマス", "Plymouth"]
+    aliases: ["普利茅斯"]
+    zh_cn: "普利茅斯"
+    priority: 80
+    forbidden_translations: ["普利默斯"]
+    asr_mishearings: []
+
+  - id: character.azur_lane.akashi
+    category: character
+    source: ["明石", "あかし", "Akashi"]
+    aliases: ["明石", "茗", "看板娘明石"]
+    zh_cn: "明石"
+    priority: 80
+    forbidden_translations: []
+    asr_mishearings: []

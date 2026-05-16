@@ -4,7 +4,7 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>LiveHime AI Subtitle Player</title>
-    <link rel="stylesheet" href="/static/css/app.css" />
+    <link rel="stylesheet" href="/static/css/app.css?v=20260515-bilingual-subtitles-2" />
     <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
   </head>
   <body>
@@ -19,6 +19,7 @@
           <button id="start-hls">Start HLS</button>
           <button id="start-asr">Start ASR</button>
           <button id="stop-runtime">Stop</button>
+          <button id="clear-hls">Clear HLS</button>
           <button id="mock-subtitle">Mock Subtitle</button>
           <button id="mock-loop">Mock Loop</button>
         </div>
@@ -35,7 +36,12 @@
                   <option value="streamlink">streamlink</option>
                 </select>
               </label>
-              <label>Quality<input name="input.quality" /></label>
+              <label>Quality
+                <select name="input.quality" id="quality-select">
+                  <option value="best">best</option>
+                  <option value="worst">worst</option>
+                </select>
+              </label>
               <label>Proxy
                 <select name="network.proxy_enabled">
                   <option value="false">off</option>
@@ -76,6 +82,7 @@
             <div class="toolbar">
               <button id="save-restart" type="submit">Save & Restart</button>
               <button id="reload-config" type="button">Reload Config</button>
+              <button id="refresh-qualities" type="button">Refresh Quality</button>
             </div>
             <div id="config-message" class="inline-message"></div>
           </form>
@@ -84,6 +91,7 @@
           <h2>Diagnostics</h2>
           <div class="toolbar">
             <button id="run-diagnostics" type="button">Run Diagnostics</button>
+            <button id="test-deepseek" type="button">Test DeepSeek</button>
           </div>
           <pre id="diagnostics-output" class="diagnostics-output"></pre>
         </section>
@@ -99,10 +107,29 @@
           <div><span>Terms Hit</span><strong id="terms-hit-status">-</strong></div>
           <div><span>Error</span><strong id="error-status">-</strong></div>
         </div>
+        <section class="config-panel">
+          <h2>Queues</h2>
+          <div class="status-list compact">
+            <div><span>Audio</span><strong id="queue-audio-status">0</strong></div>
+            <div><span>ASR</span><strong id="queue-asr-status">0</strong></div>
+            <div><span>Translate</span><strong id="queue-translation-status">0</strong></div>
+            <div><span>Subtitle</span><strong id="queue-subtitle-status">0</strong></div>
+            <div><span>Dropped</span><strong id="queue-dropped-status">0</strong></div>
+            <div><span>ASR Avg</span><strong id="asr-avg-status">-</strong></div>
+            <div><span>DeepSeek Avg</span><strong id="translation-avg-status">-</strong></div>
+          </div>
+        </section>
+        <section class="config-panel">
+          <div class="panel-title-row">
+            <h2>Subtitle History</h2>
+            <button id="clear-history" type="button">Clear History</button>
+          </div>
+          <div id="history-list" class="history-list"></div>
+        </section>
         <div id="source-log" class="subtitle-log"></div>
         <div id="subtitle-log" class="subtitle-log"></div>
       </aside>
     </main>
-    <script src="/static/js/player.js"></script>
+    <script src="/static/js/player.js?v=20260515-bilingual-subtitles-2"></script>
   </body>
 </html>

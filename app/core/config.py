@@ -81,6 +81,16 @@ class RuntimeConfig(BaseModel):
     hls_dir: str = "app/runtime/hls"
     live_terms_db: str = "app/runtime/live_terms.sqlite3"
     unknown_terms_log: str = "app/runtime/unknown_terms.log"
+    subtitle_failures_log: str = "app/runtime/subtitle_failures.log"
+
+
+class QueueConfig(BaseModel):
+    audio_queue_max: int = 20
+    asr_queue_max: int = 8
+    translation_queue_max: int = 8
+    subtitle_history_limit: int = 50
+    asr_concurrency: int = 1
+    translation_concurrency: int = 1
 
 
 class AppConfig(BaseModel):
@@ -93,6 +103,7 @@ class AppConfig(BaseModel):
     translation: TranslationConfig = Field(default_factory=TranslationConfig)
     glossary: GlossaryConfig = Field(default_factory=GlossaryConfig)
     runtime: RuntimeConfig = Field(default_factory=RuntimeConfig)
+    queues: QueueConfig = Field(default_factory=QueueConfig)
 
 
 def load_config(path: str | Path = "config.yaml") -> AppConfig:
@@ -170,4 +181,10 @@ def public_config(config: AppConfig) -> dict:
             "target_language": config.translation.target_language,
         },
         "glossary": {"game_id": config.glossary.game_id},
+        "queues": {
+            "audio_queue_max": config.queues.audio_queue_max,
+            "asr_queue_max": config.queues.asr_queue_max,
+            "translation_queue_max": config.queues.translation_queue_max,
+            "subtitle_history_limit": config.queues.subtitle_history_limit,
+        },
     }

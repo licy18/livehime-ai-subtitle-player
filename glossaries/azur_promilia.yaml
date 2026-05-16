@@ -1,0 +1,340 @@
+game_id: azur_promilia
+zh_cn_title: "蓝色星原：旅谣"
+terms:
+  - id: game.azur_promilia.title
+    category: game_title
+    source:
+      - Azur Promilia
+      - 蓝色星原：旅谣
+      - 蓝色星原旅谣
+    aliases:
+      - Azure Promilia
+      - Azure Promillia
+      - Azur Promelia
+      - Azur Promillia
+      - 蓝色星原
+      - 辰蓝双星：旅谣
+      - 辰蓝双星
+    zh_cn: "蓝色星原：旅谣"
+    notes: "游戏官方简中名。"
+    priority: 100
+    forbidden_translations:
+      - 阿祖尔普罗米利亚
+      - 阿祖尔·普罗米利亚
+      - 蓝色普罗米利亚
+      - 蓝色星场
+      - Azure Familiar
+    asr_mishearings:
+      - Azure Familiar
+      - Azure Promilia
+
+  - id: world.azur_promilia.promilia
+    category: world
+    source:
+      - Promilia
+      - 普罗米利亚
+    aliases:
+      - Promillia
+      - Promelia
+      - 普罗米莉亚
+    zh_cn: "普罗米利亚"
+    priority: 90
+    forbidden_translations:
+      - 普罗米莉亚
+      - 普罗梅利亚
+    asr_mishearings: []
+
+  - id: world.azur_promilia.starfarer
+    category: world
+    source:
+      - 星临者
+    aliases:
+      - Starfarer
+      - Starfarers
+      - 星临
+      - 主角
+    zh_cn: "星临者"
+    priority: 80
+    forbidden_translations:
+      - 观星者
+      - 星旅者
+    asr_mishearings: []
+
+  - id: system.azur_promilia.kibo
+    category: system
+    source:
+      - 奇波
+    aliases:
+      - Kibo
+      - Kibo pets
+      - pet
+      - pets
+      - 星宠
+    zh_cn: "奇波"
+    notes: "游戏中的伙伴/宠物类核心称呼。"
+    priority: 80
+    forbidden_translations:
+      - 宠物
+      - 精灵
+      - 帕鲁
+    asr_mishearings: []
+
+  - id: race.azur_promilia.pami
+    category: race
+    source:
+      - 帕米
+    aliases:
+      - Pami
+    zh_cn: "帕米"
+    priority: 70
+    forbidden_translations: []
+    asr_mishearings: []
+
+  - id: race.azur_promilia.human
+    category: race
+    source:
+      - 智人
+    aliases:
+      - Humans
+      - human
+    zh_cn: "智人"
+    priority: 60
+    forbidden_translations:
+      - 人类
+    asr_mishearings: []
+
+  - id: race.azur_promilia.high_elf
+    category: race
+    source:
+      - 高等精灵
+    aliases:
+      - High Elf
+      - High Elves
+    zh_cn: "高等精灵"
+    priority: 60
+    forbidden_translations: []
+    asr_mishearings: []
+
+  - id: race.azur_promilia.orc
+    category: race
+    source:
+      - 兽人
+    aliases:
+      - Orc
+      - Orcs
+    zh_cn: "兽人"
+    priority: 60
+    forbidden_translations: []
+    asr_mishearings: []
+
+  - id: character.azur_promilia.abi
+    category: character
+    source: [阿比]
+    aliases: [Abi, Abby]
+    zh_cn: "阿比"
+    priority: 70
+    forbidden_translations: []
+    asr_mishearings: []
+
+  - id: character.azur_promilia.ainisi
+    category: character
+    source: [艾妮丝]
+    aliases: [Anis, Anise, Ainis]
+    zh_cn: "艾妮丝"
+    priority: 70
+    forbidden_translations: []
+    asr_mishearings: []
+
+  - id: character.azur_promilia.falanta
+    category: character
+    source: [法兰塔]
+    aliases: [Falanta, Franta]
+    zh_cn: "法兰塔"
+    priority: 70
+    forbidden_translations: []
+    asr_mishearings: []
+
+  - id: character.azur_promilia.hanyouyou
+    category: character
+    source: [寒悠悠]
+    aliases: [Han Youyou, Youyou]
+    zh_cn: "寒悠悠"
+    priority: 70
+    forbidden_translations: []
+    asr_mishearings: []
+
+  - id: character.azur_promilia.jisebeilu
+    category: character
+    source: [姬瑟贝露]
+    aliases: [Jisebeilu, Giselle]
+    zh_cn: "姬瑟贝露"
+    priority: 70
+    forbidden_translations:
+      - 吉赛尔
+    asr_mishearings: []
+
+  - id: character.azur_promilia.lili
+    category: character
+    source: [莉莉]
+    aliases: [Lili, Lily]
+    zh_cn: "莉莉"
+    priority: 70
+    forbidden_translations: []
+    asr_mishearings: []
+
+  - id: character.azur_promilia.luluka
+    category: character
+    source: [璐璐卡]
+    aliases: [Luluka, Ruruka]
+    zh_cn: "璐璐卡"
+    priority: 70
+    forbidden_translations: []
+    asr_mishearings: []
+
+  - id: character.azur_promilia.luoqing
+    category: character
+    source: [洛卿]
+    aliases: [Luoqing, Luo Qing]
+    zh_cn: "洛卿"
+    priority: 70
+    forbidden_translations: []
+    asr_mishearings: []
+
+  - id: character.azur_promilia.midi
+    category: character
+    source: [米蒂]
+    aliases: [Midi, Mitty]
+    zh_cn: "米蒂"
+    priority: 70
+    forbidden_translations: []
+    asr_mishearings: []
+
+  - id: character.azur_promilia.moyin
+    category: character
+    source: [末音]
+    aliases: [Moyin, Mo Yin]
+    zh_cn: "末音"
+    priority: 70
+    forbidden_translations: []
+    asr_mishearings: []
+
+  - id: character.azur_promilia.nuonuo
+    category: character
+    source: [诺诺]
+    aliases: [Nono, Nuonuo]
+    zh_cn: "诺诺"
+    priority: 70
+    forbidden_translations: []
+    asr_mishearings: []
+
+  - id: character.azur_promilia.pengpeng
+    category: character
+    source: [芃芃]
+    aliases: [Pengpeng, Peng Peng]
+    zh_cn: "芃芃"
+    priority: 70
+    forbidden_translations: []
+    asr_mishearings: []
+
+  - id: character.azur_promilia.telala
+    category: character
+    source: [忒拉拉]
+    aliases: [Telala, Terara]
+    zh_cn: "忒拉拉"
+    priority: 70
+    forbidden_translations: []
+    asr_mishearings: []
+
+  - id: character.azur_promilia.xifuliya
+    category: character
+    source: [西芙莉雅]
+    aliases: [Sifliya, Sifuliya, Sifria]
+    zh_cn: "西芙莉雅"
+    priority: 70
+    forbidden_translations:
+      - 西弗利亚
+      - 希芙莉亚
+    asr_mishearings: []
+
+  - id: character.azur_promilia.xiaer
+    category: character
+    source: [夏儿]
+    aliases: [Xiaer, Xia Er, Char]
+    zh_cn: "夏儿"
+    priority: 70
+    forbidden_translations: []
+    asr_mishearings: []
+
+  - id: character.azur_promilia.yuanchiyo
+    category: character
+    source: [源千代]
+    aliases: [Yuan Chiyo, Chiyo]
+    zh_cn: "源千代"
+    priority: 70
+    forbidden_translations:
+      - 源千世
+    asr_mishearings: []
+
+  - id: kibo.azur_promilia.xingyao
+    category: kibo
+    source: [星鳐]
+    aliases: [Star Ray, Xingyao]
+    zh_cn: "星鳐"
+    priority: 50
+    forbidden_translations:
+      - 星瑶
+    asr_mishearings: []
+
+  - id: kibo.azur_promilia.dulu
+    category: kibo
+    source: [嘟噜]
+    aliases: [Dulu]
+    zh_cn: "嘟噜"
+    priority: 50
+    forbidden_translations: []
+    asr_mishearings: []
+
+  - id: kibo.azur_promilia.miaoji
+    category: kibo
+    source: [苗鸡]
+    aliases: [Miaoji]
+    zh_cn: "苗鸡"
+    priority: 50
+    forbidden_translations: []
+    asr_mishearings: []
+
+  - id: kibo.azur_promilia.caiji
+    category: kibo
+    source: [菜鸡]
+    aliases: [Caiji]
+    zh_cn: "菜鸡"
+    priority: 50
+    forbidden_translations: []
+    asr_mishearings: []
+
+  - id: item.azur_promilia.qijiguo
+    category: item
+    source: [奇迹果]
+    aliases: [Miracle Fruit]
+    zh_cn: "奇迹果"
+    priority: 40
+    forbidden_translations: []
+    asr_mishearings: []
+
+  - id: item.azur_promilia.kongtiekuang
+    category: item
+    source: [空铁矿]
+    aliases: [Sky Iron Ore]
+    zh_cn: "空铁矿"
+    priority: 40
+    forbidden_translations: []
+    asr_mishearings: []
+
+  - id: item.azur_promilia.jingjinkuang
+    category: item
+    source: [精金矿]
+    aliases: [Adamantite Ore]
+    zh_cn: "精金矿"
+    priority: 40
+    forbidden_translations: []
+    asr_mishearings: []

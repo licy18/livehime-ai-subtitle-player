@@ -77,3 +77,12 @@ runtime:
   hls_dir: "app/runtime/hls"
   live_terms_db: "app/runtime/live_terms.sqlite3"
   unknown_terms_log: "app/runtime/unknown_terms.log"
+  subtitle_failures_log: "app/runtime/subtitle_failures.log"
+
+queues:
+  audio_queue_max: 20
+  asr_queue_max: 8
+  translation_queue_max: 8
+  subtitle_history_limit: 50
+  asr_concurrency: 1
+  translation_concurrency: 1

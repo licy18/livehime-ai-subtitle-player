@@ -53,5 +53,18 @@ document.querySelector("#reload").addEventListener("click", async () => {
   await loadTerms();
 });
 
-loadTerms();
+function applyQueryDraft() {
+  const params = new URLSearchParams(window.location.search);
+  const source = params.get("source");
+  const zhCn = params.get("zh_cn");
+  if (source) {
+    form.elements.id.value = source.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "").slice(0, 60);
+    form.elements.source.value = source;
+  }
+  if (zhCn) {
+    form.elements.zh_cn.value = zhCn;
+  }
+}
 
+loadTerms();
+applyQueryDraft();

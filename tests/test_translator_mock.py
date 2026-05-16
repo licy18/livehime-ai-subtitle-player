@@ -2,7 +2,12 @@ import pytest
 
 from app.core.config import AppConfig, TranslationConfig
 from app.models.term import Term
-from app.services.translator import DeepSeekV4Translator, MockTranslator, parse_translation_json
+from app.services.translator import (
+    DeepSeekV4Translator,
+    MockTranslator,
+    is_simplified_chinese_translation,
+    parse_translation_json,
+)
 
 
 @pytest.mark.asyncio
@@ -33,9 +38,29 @@ def test_parse_translation_json_repairs_wrapped_json():
     assert parsed["zh"] == "你好"
 
 
+def test_parse_translation_json_accepts_fenced_and_alias_keys():
+    parsed = parse_translation_json('```json\n{"translation":"这个角色很强","terms_used":"bad"}\n```')
+
+    assert parsed == {"zh": "这个角色很强", "terms_used": [], "uncertain_terms": []}
+
+
+def test_parse_translation_json_rejects_broken_json():
+    parsed = parse_translation_json('{"zh":"黄色, 巨, 陪, 亲, 爱,')
+
+    assert parsed["zh"] == ""
+    assert parsed["uncertain_terms"] == ["invalid_json"]
+
+
+def test_simplified_chinese_translation_validation():
+    assert is_simplified_chinese_translation("这个角色很强") is True
+    assert is_simplified_chinese_translation("근데 뭐라고 했어") is False
+    assert is_simplified_chinese_translation("Thank you for watching") is False
+
+
 @pytest.mark.asyncio
 async def test_deepseek_missing_api_key_is_clear(monkeypatch):
     monkeypatch.delenv("DEEPSEEK_API_KEY", raising=False)
+    monkeypatch.setattr("app.core.env._read_windows_env_var", lambda name, scope: None)
     translator = DeepSeekV4Translator(AppConfig(translation=TranslationConfig(provider="deepseek_v4")))
 
     with pytest.raises(RuntimeError, match="DEEPSEEK_API_KEY is not set"):

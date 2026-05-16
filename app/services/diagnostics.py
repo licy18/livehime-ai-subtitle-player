@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 
 from app.core.config import AppConfig, proxy_env
+from app.core.env import refresh_env_var_from_windows
 from app.services.streaming import StreamResolver
 
 
@@ -36,7 +37,7 @@ async def run_diagnostics(config: AppConfig) -> dict:
         },
         "translation": {
             "provider": config.translation.provider,
-            "deepseek_api_key_present": bool(os.getenv("DEEPSEEK_API_KEY")),
+            "deepseek_api_key_present": bool(refresh_env_var_from_windows("DEEPSEEK_API_KEY")),
         },
         "hls": {
             "dir": str(hls_dir),
@@ -106,4 +107,3 @@ def _proxy_env_active(config: AppConfig) -> bool:
 
 def _looks_like_url(value: str) -> bool:
     return value.startswith(("http://", "https://"))
-

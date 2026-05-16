@@ -18,10 +18,10 @@ class VADSegmenter:
         self,
         sample_rate: int = 16000,
         frame_ms: int = 30,
-        silence_ms: int = 600,
-        min_voice_ms: int = 240,
-        max_segment_ms: int = 5000,
-        rms_threshold: int = 350,
+        silence_ms: int = 450,
+        min_voice_ms: int = 180,
+        max_segment_ms: int = 4500,
+        rms_threshold: int = 260,
     ) -> None:
         self.sample_rate = sample_rate
         self.frame_ms = frame_ms

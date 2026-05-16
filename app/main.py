@@ -18,6 +18,7 @@ from app.models.term import Term
 from app.services.diagnostics import run_diagnostics
 from app.services.glossary_builder import GlossaryBuilder
 from app.services.pipeline import RuntimePipeline
+from app.services.streaming import StreamResolver
 from app.services.terminology_manager import TerminologyManager
 from app.services.translator import create_translator
 from app.services.websocket_manager import WebSocketManager
@@ -25,6 +26,7 @@ from app.services.websocket_manager import WebSocketManager
 
 def create_app(config: AppConfig | None = None, config_path: str | Path = "config.yaml") -> FastAPI:
     app_config = config or load_config()
+    process_started_at = time.time()
     terminology = TerminologyManager(app_config)
     translator = create_translator(app_config)
     websocket_manager = WebSocketManager()
@@ -43,6 +45,14 @@ def create_app(config: AppConfig | None = None, config_path: str | Path = "confi
     Path(app_config.runtime.hls_dir).mkdir(parents=True, exist_ok=True)
     app.mount("/static", StaticFiles(directory=static_dir), name="static")
     app.mount("/hls", StaticFiles(directory=app_config.runtime.hls_dir), name="hls")
+
+    @app.middleware("http")
+    async def no_cache_runtime_assets(request, call_next):
+        response = await call_next(request)
+        path = request.url.path
+        if path.startswith(("/hls/", "/api/")) or path in {"/player", "/static/js/player.js"}:
+            response.headers["Cache-Control"] = "no-store, max-age=0"
+        return response
 
     @app.on_event("shutdown")
     async def shutdown() -> None:
@@ -66,7 +76,7 @@ def create_app(config: AppConfig | None = None, config_path: str | Path = "confi
 
     @app.get("/api/health")
     async def health() -> dict:
-        return {"ok": True}
+        return {"ok": True, "started_at": process_started_at}
 
     @app.get("/api/status")
     async def status() -> dict:
@@ -75,6 +85,10 @@ def create_app(config: AppConfig | None = None, config_path: str | Path = "confi
     @app.get("/api/diagnostics")
     async def diagnostics() -> dict:
         return await run_diagnostics(app_config)
+
+    @app.post("/api/diagnostics/deepseek-test")
+    async def deepseek_test() -> dict:
+        return await pipeline.deepseek_test()
 
     @app.get("/api/time")
     async def server_time() -> dict:
@@ -90,6 +104,26 @@ def create_app(config: AppConfig | None = None, config_path: str | Path = "confi
     async def get_config() -> dict:
         return app_config.model_dump(mode="json")
 
+    @app.post("/api/input/qualities")
+    async def input_qualities(payload: dict) -> dict:
+        preview_config = app_config.model_copy(deep=True)
+        input_payload = payload.get("input", {})
+        network_payload = payload.get("network", {})
+        if "url" in input_payload:
+            preview_config.input.url = input_payload["url"]
+        if "resolver" in input_payload:
+            preview_config.input.resolver = input_payload["resolver"]
+        if "quality" in input_payload:
+            preview_config.input.quality = input_payload["quality"]
+        if "proxy_enabled" in network_payload:
+            preview_config.network.proxy_enabled = bool(network_payload["proxy_enabled"])
+        if "proxy_url" in network_payload:
+            preview_config.network.proxy_url = network_payload["proxy_url"]
+        try:
+            return await StreamResolver(preview_config).list_qualities()
+        except Exception as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+
     @app.put("/api/config")
     async def put_config(payload: dict) -> dict:
         nonlocal app_config
@@ -104,12 +138,16 @@ def create_app(config: AppConfig | None = None, config_path: str | Path = "confi
 
     @app.post("/api/runtime/save-config-and-restart")
     async def save_config_and_restart(payload: dict) -> dict:
+        nonlocal app_config
         try:
             updated = AppConfig.model_validate(payload)
         except Exception as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         save_config(updated, app.state.config_path)
+        app_config = updated
+        app.state.config = updated
         pipeline.stop()
+        pipeline.hls_buffer.clear_runtime_files()
         _restart_after_response(app.state.config_path)
         return {"ok": True, "message": "Configuration saved. Backend restarting."}
 
@@ -134,6 +172,19 @@ def create_app(config: AppConfig | None = None, config_path: str | Path = "confi
     async def stop_runtime() -> dict:
         pipeline.stop()
         return pipeline.status()
+
+    @app.post("/api/runtime/clear-hls")
+    async def clear_hls() -> dict:
+        return pipeline.clear_hls()
+
+    @app.get("/api/subtitles/history")
+    async def subtitle_history() -> list[dict]:
+        return pipeline.history_items()
+
+    @app.post("/api/subtitles/history/clear")
+    async def clear_subtitle_history() -> dict:
+        pipeline.clear_history()
+        return {"ok": True}
 
     @app.get("/api/terms")
     async def get_terms() -> list[dict]:
