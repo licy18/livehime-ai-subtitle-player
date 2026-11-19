@@ -14,20 +14,24 @@ from app.core.config import AppConfig
 from app.core.env import refresh_env_var_from_windows
 from app.models.subtitle import TranscriptSegment, TranslationResult
 from app.services.asr import ASRWorker
-from app.services.streaming import AudioExtractor, HLSBuffer, StreamResolver
+from app.services.hls_media import PCM_SAMPLE_BYTES, SAMPLE_RATE, decode_fragment_audio
+from app.services.srt_archive import RecordingSubtitles
+from app.services.streaming import HLSBuffer, StreamResolver
 from app.services.subtitle_scheduler import SubtitleScheduler
 from app.services.terminology_manager import TerminologyManager
 from app.services.translation_verifier import TranslationVerifier
 from app.services.translator import DeepSeekV4Translator, Translator
-from app.services.vad import VADSegmenter
+from app.services.vad import AudioSegment, VADSegmenter
 from app.services.websocket_manager import WebSocketManager
 
 
 @dataclass
 class QueuedAudioSegment:
     pcm: bytes
-    start_monotonic: float
-    end_monotonic: float
+    start_epoch: float
+    end_epoch: float
+    stream_id: str
+    start_pts: float | None
 
 
 class RuntimePipeline:
@@ -44,13 +48,15 @@ class RuntimePipeline:
         self.websocket_manager = websocket_manager
         self.stream_resolver = StreamResolver(config)
         self.hls_buffer = HLSBuffer(config)
-        self.audio_extractor = AudioExtractor(config)
         self.asr = ASRWorker(config, terminology)
         self.scheduler = SubtitleScheduler(config.video, config.subtitle)
         self.verifier = TranslationVerifier()
         self.started_at = time.monotonic()
         self.source_url: str | None = None
         self.last_error: str | None = None
+        self.recording_subtitles: RecordingSubtitles | None = None
+        self._lifecycle_lock = asyncio.Lock()
+        self._finishing = False
 
         self.audio_queue: asyncio.Queue[QueuedAudioSegment] = asyncio.Queue(maxsize=config.queues.audio_queue_max)
         self.translation_queue: asyncio.Queue[TranscriptSegment] = asyncio.Queue(
@@ -59,6 +65,7 @@ class RuntimePipeline:
         self.subtitle_queue: asyncio.Queue[dict] = asyncio.Queue(maxsize=config.queues.translation_queue_max)
         self.queue_dropped = {"audio": 0, "translation": 0, "subtitle": 0}
         self.history: deque[dict] = deque(maxlen=config.queues.subtitle_history_limit)
+        self._recent_transcripts: deque[TranscriptSegment] = deque(maxlen=3)
         self.asr_latencies: deque[float] = deque(maxlen=50)
         self.translation_latencies: deque[float] = deque(maxlen=50)
 
@@ -83,10 +90,16 @@ class RuntimePipeline:
         self.last_audio_at: float | None = None
 
     async def start_hls(self) -> dict:
+        async with self._lifecycle_lock:
+            return await self._start_hls()
+
+    async def _start_hls(self) -> dict:
         try:
             if self.hls_buffer.is_running():
                 await self.websocket_manager.broadcast({"type": "status", "message": "HLS buffer already running"})
                 return self.hls_buffer.status()
+            if self.hls_buffer.stream_id is not None:
+                await self._finish()
             self.last_error = None
             if self.config.input.resolver == "streamlink":
                 self.source_url = self.config.input.url
@@ -94,7 +107,12 @@ class RuntimePipeline:
             else:
                 self.source_url = await self.stream_resolver.resolve()
                 self.hls_buffer.start(self.source_url)
+            stream_id = self.hls_buffer.stream_id
+            recording = self.hls_buffer.recording_path
+            self.recording_subtitles = RecordingSubtitles(stream_id, recording) if stream_id and recording else None
             self._ensure_hls_trim_task()
+            if self.recording_subtitles and self.config.asr.enabled and self.config.asr.provider != "mock":
+                self._start_audio_analysis(self.recording_subtitles.stream_id)
             await self.websocket_manager.broadcast({"type": "status", "message": "HLS buffer started"})
             return self.hls_buffer.status()
         except Exception as exc:
@@ -118,25 +136,39 @@ class RuntimePipeline:
         self._mock_task = asyncio.create_task(self._mock_loop())
 
     async def start_asr(self) -> dict:
-        self._ensure_output_workers()
+        async with self._lifecycle_lock:
+            return await self._start_asr()
+
+    async def _start_asr(self) -> dict:
         if self.config.asr.provider == "mock":
             self.start_mock_loop()
             await self.websocket_manager.broadcast({"type": "status", "message": "Mock ASR loop started"})
             return self.status()
-        if self._audio_task and not self._audio_task.done():
+        if self._audio_task and (
+            not self._audio_task.done() or self._archive_for(self.hls_buffer.stream_id)
+        ):
             return self.status()
 
         try:
-            if self.source_url is None:
-                self.source_url = await self.stream_resolver.resolve()
-            self._ensure_asr_workers()
-            self._audio_task = asyncio.create_task(self._audio_loop(self.source_url))
+            if not self.hls_buffer.is_running() and not self.hls_buffer.playlist().fragments:
+                await self._start_hls()
+            stream_id = self.hls_buffer.stream_id
+            if stream_id is None:
+                raise RuntimeError("HLS input is not available")
+            self._start_audio_analysis(stream_id)
             await self.websocket_manager.broadcast({"type": "status", "message": "ASR loop started"})
             return self.status()
         except Exception as exc:
             self.last_error = str(exc)
             await self.websocket_manager.broadcast({"type": "error", "message": self.last_error})
             raise
+
+    def _start_audio_analysis(self, stream_id: str) -> None:
+        if self._is_task_running(self._audio_task):
+            return
+        self._ensure_output_workers()
+        self._ensure_asr_workers()
+        self._audio_task = asyncio.create_task(self._audio_loop(stream_id))
 
     async def _mock_loop(self) -> None:
         while True:
@@ -150,86 +182,123 @@ class RuntimePipeline:
                 await self._record_error(exc)
                 await asyncio.sleep(5)
 
-    async def _audio_loop(self, source_url: str) -> None:
+    async def _audio_loop(self, stream_id: str) -> None:
         vad = VADSegmenter()
-        audio_base_monotonic = time.monotonic()
-        while True:
-            chunks_seen = 0
-            bytes_seen = 0
-            try:
-                if self.config.input.resolver == "streamlink":
-                    try:
-                        audio_source_url = await self.stream_resolver.resolve(
-                            self.config.input.url,
-                            self.config.input.quality,
-                        )
-                        process = self.audio_extractor.start(audio_source_url)
-                    except Exception:
-                        process = self.audio_extractor.start_streamlink_pipe(self.config.input.url)
-                else:
-                    process = self.audio_extractor.start(source_url)
-                stdout = process.stdout
-                if stdout is None:
-                    raise RuntimeError("Audio extractor stdout is not available")
-                while True:
-                    try:
-                        chunk = await asyncio.wait_for(asyncio.to_thread(stdout.read, 4096), timeout=8)
-                    except TimeoutError as exc:
-                        raise RuntimeError("Audio extractor read timed out") from exc
-                    if not chunk:
-                        break
-                    chunks_seen += 1
-                    bytes_seen += len(chunk)
-                    self.audio_chunks_seen += 1
-                    self.audio_bytes_seen += len(chunk)
-                    self.last_audio_at = time.monotonic()
-                    if self.last_error and (
-                        "Audio extractor" in self.last_error
-                        or "Unable to open URL" in self.last_error
-                        or "audio_status" in self.last_error
-                    ):
-                        self.last_error = None
-                    for audio_segment in vad.push(chunk):
-                        await self._enqueue_audio_segment(audio_base_monotonic, audio_segment)
-                for audio_segment in vad.flush():
-                    await self._enqueue_audio_segment(audio_base_monotonic, audio_segment)
-
-                return_code = process.poll()
-                if return_code not in (0, None):
-                    stderr = ""
-                    if process.stderr:
-                        stderr = process.stderr.read().decode("utf-8", errors="ignore")
-                    raise RuntimeError(stderr.strip() or f"Audio extractor exited with {return_code}")
-                if bytes_seen == 0:
-                    raise RuntimeError("Audio extractor ended without producing PCM bytes")
-            except asyncio.CancelledError:
-                raise
-            except Exception as exc:
-                status = self.audio_extractor.status()
-                await self._record_error(
-                    RuntimeError(f"{exc}; audio_status={status}; chunks={chunks_seen}; bytes={bytes_seen}")
+        archive = self._archive_for(stream_id)
+        next_sequence = 0 if archive else None
+        audio_base = None
+        audio_end = None
+        audio_base_pts = None
+        while self.hls_buffer.stream_id == stream_id:
+            playlist = self.hls_buffer.playlist()
+            fragments = playlist.fragments
+            if next_sequence is None and fragments:
+                edge = fragments[-1].start_epoch + fragments[-1].duration
+                cutoff = edge - self.config.video.delay_seconds
+                if playlist.ended:
+                    cutoff = fragments[0].start_epoch
+                next_sequence = next(
+                    (fragment.sequence for fragment in fragments if fragment.start_epoch + fragment.duration > cutoff),
+                    fragments[-1].sequence,
                 )
-                await asyncio.sleep(3)
-            finally:
-                self.audio_extractor.stop()
+            for fragment in fragments:
+                if fragment.sequence < next_sequence:
+                    continue
+                if archive:
+                    archive.missing_fragments += fragment.sequence - next_sequence
+                next_sequence = fragment.sequence + 1
+                try:
+                    decoded = await asyncio.to_thread(decode_fragment_audio, self.hls_buffer.directory, fragment)
+                except FileNotFoundError:
+                    if archive:
+                        archive.missing_fragments += 1
+                    continue
+                except Exception as exc:
+                    if archive:
+                        archive.missing_fragments += 1
+                    await self._record_error(exc)
+                    continue
+                if archive and fragment.sequence == 0:
+                    archive.first_hls_video_pts = decoded.video_pts
+                audio_start, pcm = decoded.start_epoch, decoded.pcm
+                if not pcm:
+                    continue
+                if self.hls_buffer.stream_id != stream_id:
+                    return
+                self.audio_chunks_seen += 1
+                self.audio_bytes_seen += len(pcm)
+                self.last_audio_at = time.monotonic()
+                gap = 0 if audio_end is None else round((audio_start - audio_end) * SAMPLE_RATE)
+                if archive and audio_base_pts is not None and decoded.start_pts is not None:
+                    consumed = audio_end - audio_base
+                    gap = round((decoded.start_pts - audio_base_pts - consumed) * SAMPLE_RATE)
+                if audio_base is None or abs(gap) > SAMPLE_RATE // 4:
+                    if audio_base is not None:
+                        await self._enqueue_audio(audio_base, audio_base_pts, stream_id, vad.flush())
+                        vad = VADSegmenter()
+                    audio_base = audio_end = audio_start
+                    audio_base_pts = decoded.start_pts
+                    gap = 0
+                if gap > 0:
+                    pcm = bytes(gap * PCM_SAMPLE_BYTES) + pcm
+                elif gap < 0:
+                    pcm = pcm[-gap * PCM_SAMPLE_BYTES:]
+                audio_end += len(pcm) / (SAMPLE_RATE * PCM_SAMPLE_BYTES)
+                await self._enqueue_audio(audio_base, audio_base_pts, stream_id, vad.push(pcm))
 
-    async def _enqueue_audio_segment(self, audio_base_monotonic: float, audio_segment: Any) -> None:
-        item = QueuedAudioSegment(
-            pcm=audio_segment.pcm,
-            start_monotonic=audio_base_monotonic + audio_segment.start_seconds,
-            end_monotonic=audio_base_monotonic + audio_segment.end_seconds,
-        )
-        self.vad_segments_seen += 1
-        await self._put_drop_oldest(self.audio_queue, item, "audio")
+            if playlist.ended or not self.hls_buffer.is_running():
+                if not playlist.ended and self.hls_buffer.playlist() != playlist:
+                    continue
+                if audio_base is not None:
+                    await self._enqueue_audio(audio_base, audio_base_pts, stream_id, vad.flush())
+                if archive:
+                    archive.flush()
+                return
+            await asyncio.sleep(0.15)
+
+    async def _enqueue_audio(
+        self, audio_base: float, audio_base_pts: float | None, stream_id: str, segments: list[AudioSegment],
+    ) -> None:
+        for segment in segments:
+            item = QueuedAudioSegment(
+                pcm=segment.pcm,
+                start_epoch=audio_base + segment.start_seconds,
+                end_epoch=audio_base + segment.end_seconds,
+                stream_id=stream_id,
+                start_pts=audio_base_pts + segment.start_seconds if audio_base_pts is not None else None,
+            )
+            self.vad_segments_seen += 1
+            if self._archive_for(stream_id):
+                await self.audio_queue.put(item)
+            else:
+                await self._put_drop_oldest(self.audio_queue, item, "audio")
 
     async def _asr_worker(self) -> None:
         while True:
             item = await self.audio_queue.get()
             self.asr_segments_processing += 1
             try:
-                transcript = await self.asr.transcribe_bytes(item.pcm, item.start_monotonic, item.end_monotonic)
+                epoch_offset = time.time() - time.monotonic()
+                input_start = item.start_epoch - epoch_offset
+                transcript = await self.asr.transcribe_bytes(
+                    item.pcm, input_start, item.end_epoch - epoch_offset,
+                )
                 if transcript.source_text.strip():
-                    await self._put_drop_oldest(self.translation_queue, transcript, "translation")
+                    transcript.stream_id = item.stream_id
+                    transcript.media_start = transcript.start_monotonic + epoch_offset
+                    transcript.media_end = transcript.end_monotonic + epoch_offset
+                    archive = self._archive_for(item.stream_id)
+                    if archive:
+                        if item.start_pts is not None:
+                            archive.add_source(
+                                transcript.id,
+                                item.start_pts + (transcript.start_monotonic - input_start),
+                                item.start_pts + (transcript.end_monotonic - input_start),
+                                transcript.source_text,
+                            )
+                        await self.translation_queue.put(transcript)
+                    else:
+                        await self._put_drop_oldest(self.translation_queue, transcript, "translation")
             except Exception as exc:
                 await self._record_error(exc)
             finally:
@@ -269,6 +338,19 @@ class RuntimePipeline:
                 await asyncio.sleep(10)
 
     async def _build_subtitle_payload(self, transcript: TranscriptSegment) -> dict:
+        recent_context = []
+        if transcript.stream_id and transcript.source_text.strip():
+            preceding = sorted(
+                (
+                    segment for segment in self._recent_transcripts
+                    if segment.stream_id == transcript.stream_id
+                    and 0 < transcript.start_monotonic - segment.start_monotonic <= 20
+                ),
+                key=lambda segment: segment.start_monotonic,
+            )
+            recent_context = [segment.source_text.strip()[:160] for segment in preceding]
+            # Store at dispatch time so concurrent translations need not wait for previous results.
+            self._recent_transcripts.append(transcript)
         normalization = self.terminology.normalize_transcript(transcript.source_text)
         candidate_terms = self.terminology.retrieve_candidate_terms(
             normalization.text,
@@ -282,6 +364,7 @@ class RuntimePipeline:
                 normalized_text=normalization.text,
                 source_language=transcript.language,
                 candidate_terms=candidate_terms,
+                recent_context=recent_context,
             )
         except Exception as exc:
             translation_error = str(exc)
@@ -294,6 +377,10 @@ class RuntimePipeline:
                 latency=0.0,
             )
         verification = self.verifier.verify(transcript.source_text, normalization.text, translation.zh, candidate_terms)
+        archive = self._archive_for(transcript.stream_id)
+        if archive:
+            text = "【待翻译】" if translation_error is not None else verification.text
+            archive.add_translation(transcript.id, text)
         event = self.scheduler.schedule(transcript, normalization.text, translation, verification)
         payload = event.model_dump(mode="json")
         payload["transcript_id"] = transcript.id
@@ -360,6 +447,9 @@ class RuntimePipeline:
         item = {
             "id": payload["id"],
             "transcript_id": payload.get("transcript_id"),
+            "stream_id": payload.get("stream_id"),
+            "media_show_at": payload.get("media_show_at"),
+            "media_hide_at": payload.get("media_hide_at"),
             "source_text": payload["source_text"],
             "normalized_text": payload["normalized_text"],
             "text": payload["text"],
@@ -385,9 +475,32 @@ class RuntimePipeline:
     def clear_history(self) -> None:
         self.history.clear()
 
-    def clear_hls(self) -> dict:
-        self.hls_buffer.clear_runtime_files()
-        return self.hls_buffer.status()
+    def _archive_for(self, stream_id: str | None) -> RecordingSubtitles | None:
+        archive = self.recording_subtitles
+        return archive if archive and archive.stream_id == stream_id else None
+
+    async def finish(self, *, clear_hls: bool = False) -> None:
+        async with self._lifecycle_lock:
+            await self._finish()
+            if clear_hls:
+                self.hls_buffer.clear_runtime_files()
+
+    async def _finish(self) -> None:
+        archive = self._archive_for(self.hls_buffer.stream_id)
+        if not archive:
+            self.stop()
+            return
+        self._finishing = True
+        try:
+            self.hls_buffer.finish_input()
+            if self._audio_task is not None:
+                await self._audio_task
+            await self.audio_queue.join()
+            await self.translation_queue.join()
+            archive.flush()
+        finally:
+            self.stop()
+            self._finishing = False
 
     async def deepseek_test(self) -> dict:
         if not refresh_env_var_from_windows("DEEPSEEK_API_KEY"):
@@ -418,7 +531,6 @@ class RuntimePipeline:
 
     def stop(self) -> None:
         self.hls_buffer.stop()
-        self.audio_extractor.stop()
         tasks = [
             self._mock_task,
             self._audio_task,
@@ -439,6 +551,7 @@ class RuntimePipeline:
         self._clear_queue(self.audio_queue)
         self._clear_queue(self.translation_queue)
         self._clear_queue(self.subtitle_queue)
+        self._recent_transcripts.clear()
         self.asr_segments_processing = 0
         self.translation_segments_processing = 0
 
@@ -448,6 +561,9 @@ class RuntimePipeline:
             "source_url": self.source_url,
             "last_error": self.last_error,
             "hls": self.hls_buffer.status(),
+            "recording_subtitles": {
+                **self.recording_subtitles.status(), "finishing": self._finishing,
+            } if self.recording_subtitles else None,
             "queues": {
                 "audio": self.audio_queue.qsize(),
                 "asr": self.audio_queue.qsize(),
@@ -460,7 +576,7 @@ class RuntimePipeline:
             "asr": {
                 "provider": self.config.asr.provider,
                 "running": self._is_task_running(self._audio_task) or self._is_task_running(self._mock_task),
-                "audio": self.audio_extractor.status(),
+                "audio": {"source": "hls", "process_running": self._is_task_running(self._audio_task)},
                 "segments_seen": self.asr_segments_seen,
                 "segments_processing": self.asr_segments_processing,
                 "translation_processing": self.translation_segments_processing,

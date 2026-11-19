@@ -1,8 +1,9 @@
+import json
 from pathlib import Path
 
 import yaml
 
-from app.core.config import AppConfig, GlossaryConfig, RuntimeConfig
+from app.core.config import AppConfig, ASRConfig, GlossaryConfig, RuntimeConfig
 from app.models.term import Term
 from app.services.terminology_manager import TerminologyManager
 
@@ -75,4 +76,42 @@ def test_live_term_overrides_static_term(tmp_path):
 
     terms = manager.retrieve_candidate_terms("Azur Promilia")
     assert terms[0].zh_cn == "直播修正名"
+
+
+def test_bilibot_glossary_reloads_japanese_sources(tmp_path):
+    glossary_path = tmp_path / "catalog.json"
+    payload = {"terms": [
+        {"category": "kibo", "zhCN": "奇波", "sources": {"ja": ["キボ"], "ko": ["키보"]}},
+        {"category": "item", "zhCN": "道具", "sources": {"ko": ["아이템"]}},
+    ]}
+    glossary_path.write_text(json.dumps(payload), encoding="utf-8")
+    config = make_config(tmp_path, glossary_path)
+    config.asr = ASRConfig(language="ja")
+    manager = TerminologyManager(config)
+    term, = manager.all_terms()
+    assert term.source == ["キボ"]
+    assert manager.retrieve_candidate_terms("きぼと暮らす") == [term]
+    assert manager.retrieve_candidate_terms("規模を調べる") == []
+
+    payload["terms"].reverse()
+    payload["terms"][1]["sources"]["ja"].append("キーボ")
+    glossary_path.write_text(json.dumps(payload), encoding="utf-8")
+    manager.reload()
+    assert manager.retrieve_candidate_terms("ｷｰﾎﾞがいる")[0].id == term.id
+
+
+def test_asr_candidates_rank_exact_and_reject_partial_title(tmp_path):
+    glossary_path = tmp_path / "glossary.yaml"
+    glossary_path.write_text("terms: []", encoding="utf-8")
+    manager = TerminologyManager(make_config(tmp_path, glossary_path))
+    title = Term(id="title", category="title", zh_cn="蓝色星原：旅谣", source=["アズールプロミリア"], priority=100)
+    world = Term(id="world", category="location", zh_cn="普罗米利亚", source=["プロミリア"])
+    for term in [title, world]:
+        manager.add_live_term(term)
+
+    assert manager.retrieve_candidate_terms("プロミリア") == [world]
+    assert manager.retrieve_candidate_terms("アズールプロミリアを紹介") == [title]
+    candidates = manager.retrieve_candidate_terms("アズールプロミリヤとプロミリア大陸", max_terms=1)
+    assert candidates == [world]
+    assert title in manager.retrieve_candidate_terms("今日はアズールプロミリヤを紹介")
 

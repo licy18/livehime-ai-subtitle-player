@@ -41,3 +41,23 @@ def test_scheduler_caps_display_duration():
 
     assert event.show_at == 10
     assert event.hide_at == 13
+
+
+def test_scheduler_aligns_cue_to_media_clock_without_adding_playback_delay_twice():
+    scheduler = SubtitleScheduler(
+        VideoConfig(delay_seconds=15),
+        SubtitleConfig(extra_offset_seconds=0.25, hold_seconds_after_speech=1),
+    )
+    event = scheduler.schedule(
+        TranscriptSegment(
+            id="seg-1", source_text="hello", start_monotonic=10, end_monotonic=12,
+            stream_id="current-stream", media_start=1000, media_end=1002,
+        ),
+        "hello",
+        TranslationResult(zh="你好"),
+        VerificationResult(text="你好", actions=[]),
+    )
+    assert event.stream_id == "current-stream"
+    assert event.show_at == 25.25
+    assert event.media_show_at == 1000.25
+    assert event.media_hide_at == 1003

@@ -29,6 +29,7 @@ class VideoConfig(BaseModel):
     hls_time: int = 1
     hls_list_size: int = 120
     prefer_copy: bool = True
+    record_source: bool = False
 
 
 class SubtitleConfig(BaseModel):
@@ -48,6 +49,7 @@ class ASRConfig(BaseModel):
     model: str = "small"
     device: str = "cpu"
     compute_type: str = "int8"
+    cuda_library_dir: str | None = None
     beam_size: int = 1
     language: str | None = None
     initial_prompt_terms: int = 80
@@ -56,6 +58,7 @@ class ASRConfig(BaseModel):
 class DeepSeekConfig(BaseModel):
     base_url: str = "https://api.deepseek.com"
     model: str = "deepseek-v4-flash"
+    thinking_enabled: bool | None = None
     timeout_seconds: float = 8.0
     retries: int = 1
     temperature: float = 0.1
@@ -65,6 +68,7 @@ class DeepSeekConfig(BaseModel):
 class TranslationConfig(BaseModel):
     provider: Literal["mock", "deepseek_v4"] = "mock"
     target_language: str = "zh-CN"
+    program_context: str = Field(default="", max_length=600)
     repair_strategy: Literal["rule_only", "rule_then_llm"] = "rule_only"
     deepseek_v4: DeepSeekConfig = Field(default_factory=DeepSeekConfig)
 
@@ -79,6 +83,7 @@ class GlossaryConfig(BaseModel):
 class RuntimeConfig(BaseModel):
     runtime_dir: str = "app/runtime"
     hls_dir: str = "app/runtime/hls"
+    source_recordings_dir: str = "app/runtime/recordings"
     live_terms_db: str = "app/runtime/live_terms.sqlite3"
     unknown_terms_log: str = "app/runtime/unknown_terms.log"
     subtitle_failures_log: str = "app/runtime/subtitle_failures.log"

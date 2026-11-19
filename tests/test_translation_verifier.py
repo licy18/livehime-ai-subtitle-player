@@ -1,5 +1,9 @@
+import json
+
+from app.core.config import AppConfig
 from app.models.term import Term
 from app.services.translation_verifier import TranslationVerifier, contains_untranslated_foreign_script
+from app.services.translator import DeepSeekV4Translator
 
 
 def test_verifier_replaces_forbidden_translation():
@@ -50,3 +54,18 @@ def test_foreign_script_detection_allows_chinese():
     assert contains_untranslated_foreign_script("我感觉这个角色很可爱") is False
     assert contains_untranslated_foreign_script("근데 얘가 뭐라고 했나?") is True
     assert contains_untranslated_foreign_script("お下げる儀式です") is True
+
+
+def test_fuzzy_candidate_is_a_hint_without_forced_replacement():
+    term = Term(
+        id="hospital", category="location", source=["カルノン療養院"],
+        zh_cn="卡尔侬疗养院", forbidden_translations=["病院"],
+    )
+    transcript = "カルノン療養員がいます"
+    payload = DeepSeekV4Translator(AppConfig())._build_payload(transcript, transcript, "ja", [term], [])
+    message = json.loads(payload["messages"][1]["content"])
+    result = TranslationVerifier().verify(transcript, transcript, "这里有个病院。", [term])
+
+    assert message["candidate_terms"][0]["match_type"] == "fuzzy"
+    assert result.text == "这里有个病院。"
+    assert result.missing_terms == []

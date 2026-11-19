@@ -3,126 +3,147 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>LiveHime AI Subtitle Player</title>
-    <link rel="stylesheet" href="/static/css/app.css?v=20260515-bilingual-subtitles-2" />
+    <title>直播字幕控制台</title>
+    <link rel="stylesheet" href="/static/css/app.css?v=20261119-zh-cn" />
     <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
   </head>
   <body>
     <main class="app-shell">
       <section class="stage">
-        <video id="video" controls autoplay muted></video>
+        <video id="video" controls controlslist="nofullscreen" autoplay muted></video>
         <div id="subtitle"></div>
+        <button id="stage-fullscreen" type="button" hidden>全屏（含字幕）</button>
+        <button id="enable-capture-audio" type="button" hidden>打开节目声音</button>
       </section>
       <aside class="panel">
-        <h1>LiveHime AI Subtitle Player</h1>
+        <h1>直播字幕控制台</h1>
         <div class="toolbar">
-          <button id="start-hls">Start HLS</button>
-          <button id="start-asr">Start ASR</button>
-          <button id="stop-runtime">Stop</button>
-          <button id="clear-hls">Clear HLS</button>
-          <button id="mock-subtitle">Mock Subtitle</button>
-          <button id="mock-loop">Mock Loop</button>
+          <button id="start-hls">启动抓取</button>
+          <button id="start-asr">启动识别与翻译</button>
+          <a id="capture-view" href="/player?capture=1" target="_blank" rel="noopener">打开捕获窗口</a>
+          <button id="stop-runtime">停止</button>
+          <button id="clear-hls">清理 HLS 缓存</button>
+          <button id="mock-subtitle">测试单条字幕</button>
+          <button id="mock-loop">循环测试字幕</button>
         </div>
         <section class="config-panel">
-          <h2>Config</h2>
+          <h2>参数配置</h2>
           <form id="config-form">
             <div class="form-row">
-              <label>Input URL<input name="input.url" placeholder="Local file path or stream URL" /></label>
+              <label>节目地址<input name="input.url" placeholder="直播网址、媒体地址或本地文件路径" /></label>
             </div>
             <div class="config-grid">
-              <label>Resolver
+              <label>节目源解析方式
                 <select name="input.resolver">
-                  <option value="direct">direct</option>
-                  <option value="streamlink">streamlink</option>
+                  <option value="direct">直接读取媒体</option>
+                  <option value="streamlink">Streamlink 解析直播</option>
                 </select>
               </label>
-              <label>Quality
+              <label>抓取画质
                 <select name="input.quality" id="quality-select">
-                  <option value="best">best</option>
-                  <option value="worst">worst</option>
+                  <option value="best">最高可用画质</option>
+                  <option value="worst">最低可用画质</option>
                 </select>
               </label>
-              <label>Proxy
+              <label>网络代理
                 <select name="network.proxy_enabled">
-                  <option value="false">off</option>
-                  <option value="true">on</option>
+                  <option value="false">关闭</option>
+                  <option value="true">开启</option>
                 </select>
               </label>
-              <label>Proxy URL<input name="network.proxy_url" placeholder="http://127.0.0.1:7897" /></label>
-              <label>Delay<input name="video.delay_seconds" type="number" step="0.1" /></label>
-              <label>Subtitle Offset<input name="subtitle.extra_offset_seconds" type="number" step="0.1" /></label>
-              <label>Subtitle Bottom %<input name="subtitle.bottom_percent" type="number" step="1" min="0" max="45" /></label>
-              <label>Subtitle Font<input name="subtitle.font_size_px" type="number" step="1" min="20" max="96" /></label>
-              <label>Min Display<input name="subtitle.min_display_seconds" type="number" step="0.1" min="0.5" /></label>
-              <label>Max Display<input name="subtitle.max_display_seconds" type="number" step="0.1" min="1" /></label>
-              <label>ASR
+              <label>代理地址<input name="network.proxy_url" placeholder="http://127.0.0.1:7897" /></label>
+              <label>画面延迟（秒）<input name="video.delay_seconds" type="number" step="0.1" /></label>
+              <label>同步录制源视频
+                <select name="video.record_source">
+                  <option value="false">关闭</option>
+                  <option value="true">随抓取自动录制</option>
+                </select>
+              </label>
+              <label title="正值让字幕更晚出现，负值让字幕更早出现">字幕时间微调（秒）<input name="subtitle.extra_offset_seconds" type="number" step="0.1" /></label>
+              <label title="字幕第一行的位置，占画面高度的百分比">字幕距底部（%）<input name="subtitle.bottom_percent" type="number" step="1" min="0" max="45" /></label>
+              <label>字幕字号（像素）<input name="subtitle.font_size_px" type="number" step="1" min="20" max="96" /></label>
+              <label>最短显示（秒）<input name="subtitle.min_display_seconds" type="number" step="0.1" min="0.5" /></label>
+              <label>最长显示（秒）<input name="subtitle.max_display_seconds" type="number" step="0.1" min="1" /></label>
+              <label>语音识别引擎
                 <select name="asr.provider">
-                  <option value="mock">mock</option>
-                  <option value="faster_whisper">faster_whisper</option>
+                  <option value="mock">模拟识别</option>
+                  <option value="faster_whisper">Faster-Whisper</option>
                 </select>
               </label>
-              <label>ASR Model<input name="asr.model" /></label>
-              <label>Device
+              <label>识别模型<input name="asr.model" placeholder="模型名或本地模型目录" /></label>
+              <label>识别计算设备
                 <select name="asr.device">
-                  <option value="cpu">cpu</option>
-                  <option value="cuda">cuda</option>
+                  <option value="cpu">CPU 处理器</option>
+                  <option value="cuda">NVIDIA 显卡（CUDA）</option>
                 </select>
               </label>
-              <label>Compute<input name="asr.compute_type" /></label>
-              <label>Beam<input name="asr.beam_size" type="number" step="1" min="1" /></label>
-              <label>Language<input name="asr.language" placeholder="auto" /></label>
-              <label>Translation
+              <label>计算精度<input name="asr.compute_type" /></label>
+              <label title="识别时保留的候选路径数，数值越大通常越耗时">解码束宽<input name="asr.beam_size" type="number" step="1" min="1" /></label>
+              <label>原声语言<input name="asr.language" placeholder="留空自动识别，日语填 ja" /></label>
+              <label>翻译服务
                 <select name="translation.provider">
-                  <option value="mock">mock</option>
-                  <option value="deepseek_v4">deepseek_v4</option>
+                  <option value="mock">模拟翻译</option>
+                  <option value="deepseek_v4">DeepSeek V4</option>
                 </select>
               </label>
-              <label>DeepSeek Model<input name="translation.deepseek_v4.model" /></label>
+              <label>DeepSeek 模型<input name="translation.deepseek_v4.model" /></label>
+              <label>DeepSeek 推理模式
+                <select name="translation.deepseek_v4.thinking_enabled">
+                  <option value="">使用服务默认设置</option>
+                  <option value="false">关闭推理（低延迟）</option>
+                  <option value="true">开启推理</option>
+                </select>
+              </label>
+            </div>
+            <div class="form-row">
+              <label>节目语境<textarea name="translation.program_context" maxlength="600" placeholder="游戏名称、关键专名及其常见误听词"></textarea></label>
             </div>
             <div class="toolbar">
-              <button id="save-restart" type="submit">Save & Restart</button>
-              <button id="reload-config" type="button">Reload Config</button>
-              <button id="refresh-qualities" type="button">Refresh Quality</button>
+              <button id="save-restart" type="submit">保存并重启</button>
+              <button id="reload-config" type="button">重新载入配置</button>
+              <button id="refresh-qualities" type="button">查询可用画质</button>
             </div>
             <div id="config-message" class="inline-message"></div>
           </form>
         </section>
         <section class="config-panel">
-          <h2>Diagnostics</h2>
+          <h2>诊断</h2>
           <div class="toolbar">
-            <button id="run-diagnostics" type="button">Run Diagnostics</button>
-            <button id="test-deepseek" type="button">Test DeepSeek</button>
+            <button id="run-diagnostics" type="button">运行诊断</button>
+            <button id="test-deepseek" type="button">测试 DeepSeek</button>
           </div>
           <pre id="diagnostics-output" class="diagnostics-output"></pre>
         </section>
         <div class="status-list">
-          <div><span>Input</span><strong id="input-status">-</strong></div>
-          <div><span>WebSocket</span><strong id="ws-status">connecting</strong></div>
-          <div><span>HLS</span><strong id="hls-status">waiting</strong></div>
-          <div><span>ASR</span><strong id="asr-status">waiting</strong></div>
-          <div><span>Delay</span><strong id="delay-status">-</strong></div>
-          <div><span>Terms</span><strong id="terms-status">-</strong></div>
-          <div><span>ASR Latency</span><strong id="asr-latency-status">-</strong></div>
-          <div><span>Translate Latency</span><strong id="translation-latency-status">-</strong></div>
-          <div><span>Terms Hit</span><strong id="terms-hit-status">-</strong></div>
-          <div><span>Error</span><strong id="error-status">-</strong></div>
+          <div><span>节目源</span><strong id="input-status">-</strong></div>
+          <div><span>字幕连接</span><strong id="ws-status">连接中</strong></div>
+          <div><span>视频抓取</span><strong id="hls-status">待机</strong></div>
+          <div><span>源视频录制</span><strong id="recording-status">待机</strong></div>
+          <div><span>录制字幕（SRT）</span><strong id="recording-subtitles-status">待机</strong></div>
+          <div><span>语音识别</span><strong id="asr-status">待机</strong></div>
+          <div><span>画面延迟</span><strong id="delay-status">-</strong></div>
+          <div><span>加载术语</span><strong id="terms-status">-</strong></div>
+          <div><span>本次识别耗时</span><strong id="asr-latency-status">-</strong></div>
+          <div><span>本次翻译耗时</span><strong id="translation-latency-status">-</strong></div>
+          <div><span>本次命中术语</span><strong id="terms-hit-status">-</strong></div>
+          <div><span>错误</span><strong id="error-status">-</strong></div>
         </div>
         <section class="config-panel">
-          <h2>Queues</h2>
+          <h2>处理队列</h2>
           <div class="status-list compact">
-            <div><span>Audio</span><strong id="queue-audio-status">0</strong></div>
-            <div><span>ASR</span><strong id="queue-asr-status">0</strong></div>
-            <div><span>Translate</span><strong id="queue-translation-status">0</strong></div>
-            <div><span>Subtitle</span><strong id="queue-subtitle-status">0</strong></div>
-            <div><span>Dropped</span><strong id="queue-dropped-status">0</strong></div>
-            <div><span>ASR Avg</span><strong id="asr-avg-status">-</strong></div>
-            <div><span>DeepSeek Avg</span><strong id="translation-avg-status">-</strong></div>
+            <div><span>音频</span><strong id="queue-audio-status">0</strong></div>
+            <div><span>待识别</span><strong id="queue-asr-status">0</strong></div>
+            <div><span>待翻译</span><strong id="queue-translation-status">0</strong></div>
+            <div><span>字幕</span><strong id="queue-subtitle-status">0</strong></div>
+            <div><span>丢弃任务</span><strong id="queue-dropped-status">0</strong></div>
+            <div><span>平均识别耗时</span><strong id="asr-avg-status">-</strong></div>
+            <div><span>平均翻译耗时</span><strong id="translation-avg-status">-</strong></div>
           </div>
         </section>
         <section class="config-panel">
           <div class="panel-title-row">
-            <h2>Subtitle History</h2>
-            <button id="clear-history" type="button">Clear History</button>
+            <h2>字幕历史</h2>
+            <button id="clear-history" type="button">清空历史</button>
           </div>
           <div id="history-list" class="history-list"></div>
         </section>
@@ -130,6 +151,6 @@
         <div id="subtitle-log" class="subtitle-log"></div>
       </aside>
     </main>
-    <script src="/static/js/player.js?v=20260515-bilingual-subtitles-2"></script>
+    <script src="/static/js/player.js?v=20261119-low-latency-context"></script>
   </body>
 </html>

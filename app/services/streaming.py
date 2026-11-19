@@ -2,15 +2,22 @@ from __future__ import annotations
 
 import asyncio
 import json
+import math
 import os
 import re
 import shutil
 import subprocess
 import sys
+import threading
 import time
+from collections import deque
+from datetime import datetime
 from pathlib import Path
+from typing import BinaryIO
+from uuid import uuid4
 
 from app.core.config import AppConfig, proxy_env
+from app.services.hls_media import MediaPlaylist, read_media_playlist
 
 
 class StreamResolver:
@@ -146,24 +153,122 @@ def _quality_sort_key(value: str) -> tuple[int, int, str]:
 
 
 class HLSBuffer:
+    hls_flags = "delete_segments+program_date_time+temp_file"
+
     def __init__(self, config: AppConfig) -> None:
         self.config = config
         self.process: subprocess.Popen | None = None
         self.upstream_process: subprocess.Popen | None = None
         self.last_error: str | None = None
+        self.stream_id: str | None = None
+        self.recording_path: Path | None = None
+        self.recording_setup_error: str | None = None
+        self.process_errors: deque[str] = deque(maxlen=24)
+        self.recording_errors: deque[str] = deque(maxlen=1)
+
+    @property
+    def directory(self) -> Path:
+        return Path(self.config.runtime.hls_dir).resolve()
+
+    @property
+    def list_size(self) -> int:
+        video = self.config.video
+        required = math.ceil(max(0, video.delay_seconds) / max(1, video.hls_time)) + 6
+        return max(video.hls_list_size, required)
+
+    def playlist(self) -> MediaPlaylist:
+        if self.stream_id is None:
+            return MediaPlaylist([], False)
+        return read_media_playlist(self.directory / "index.m3u8")
 
     def start(self, source_url: str) -> None:
+        self._start(source_url, use_streamlink=False)
+
+    def start_streamlink_pipe(self, source_url: str) -> None:
+        self._start(source_url, use_streamlink=True)
+
+    def _start(self, source_url: str, *, use_streamlink: bool) -> None:
         if not shutil.which("ffmpeg"):
             raise RuntimeError("FFmpeg is not installed or not on PATH")
 
-        hls_dir = Path(self.config.runtime.hls_dir)
+        hls_dir = self.directory
         hls_dir.mkdir(parents=True, exist_ok=True)
         self.stop()
         self.stop_orphaned_hls_processes()
         self.clear()
         index = hls_dir / "index.m3u8"
-        segment = hls_dir / "seg_%06d.ts"
-        video_args = ["-c:v", "copy"] if self.config.video.prefer_copy else [
+        stream_id = uuid4().hex
+        segment = hls_dir / f"seg_{stream_id}_%06d.ts"
+        self.recording_path = self._recording_target(stream_id)
+        self.last_error = None
+        self.process_errors = deque(maxlen=24)
+        self.recording_errors = deque(maxlen=1)
+
+        env = proxy_env(self.config)
+        input_args = []
+        source = source_url
+        stdin = subprocess.PIPE
+        if use_streamlink:
+            self.upstream_process = subprocess.Popen(
+                streamlink_live_command(self.config, source_url),
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                env=env,
+            )
+            self._drain_stderr(self.upstream_process)
+            stdin = self.upstream_process.stdout
+            source = "pipe:0"
+        else:
+            if Path(source_url).is_file():
+                input_args.append("-re")
+            if source_url.split("?", 1)[0].lower().endswith(".m3u8"):
+                input_args += [
+                    "-allowed_extensions", "ALL", "-allowed_segment_extensions", "ALL", "-extension_picky", "0",
+                ]
+
+        try:
+            self.process = subprocess.Popen(
+                [
+                    "ffmpeg", "-hide_banner", "-loglevel", "warning",
+                    *([] if use_streamlink else ["-fflags", "+genpts"]),
+                    *input_args, "-i", source,
+                    *self._output_args(index, segment, self.recording_path),
+                ],
+                stdin=stdin,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.PIPE,
+                env=env,
+            )
+        except OSError:
+            self.stop()
+            raise
+        finally:
+            if self.upstream_process and self.upstream_process.stdout:
+                self.upstream_process.stdout.close()
+
+        self._drain_stderr(self.process, watch_recording=self.recording_path is not None)
+        self.stream_id = stream_id
+
+    def _recording_target(self, stream_id: str) -> Path | None:
+        self.recording_setup_error = None
+        if not self.config.video.record_source:
+            return None
+
+        try:
+            directory = Path(self.config.runtime.source_recordings_dir).resolve()
+            if directory.is_relative_to(self.directory):
+                self.recording_setup_error = "录制目录须位于 HLS 缓存目录之外。"
+                return None
+            directory.mkdir(parents=True, exist_ok=True)
+        except OSError as exc:
+            self.recording_setup_error = str(exc)
+            return None
+        timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        return directory / f"source-{timestamp}-{stream_id[:8]}.ts"
+
+    def _output_args(self, index: Path, segment: Path, recording_path: Path | None) -> list[str]:
+        copy_video = self.config.video.prefer_copy
+        video_args = ["-c:v", "copy"] if copy_video else [
             "-c:v",
             "libx264",
             "-preset",
@@ -172,136 +277,60 @@ class HLSBuffer:
             "zerolatency",
             "-pix_fmt",
             "yuv420p",
+            "-force_key_frames",
+            f"expr:gte(t,n_forced*{self.config.video.hls_time})",
         ]
-        command = [
-            "ffmpeg",
-            "-hide_banner",
-            "-loglevel",
-            "warning",
-            "-fflags",
-            "+genpts",
-            "-allowed_extensions",
-            "ALL",
-            "-allowed_segment_extensions",
-            "ALL",
-            "-extension_picky",
-            "0",
-            "-i",
-            source_url,
-            "-map",
-            "0:v:0",
-            "-map",
-            "0:a:0?",
-            *video_args,
-            "-c:a",
-            "aac",
-            "-b:a",
-            "160k",
-            "-ar",
-            "48000",
-            "-ac",
-            "2",
-            "-f",
-            "hls",
-            "-hls_time",
-            str(self.config.video.hls_time),
-            "-hls_list_size",
-            str(self.config.video.hls_list_size),
-            "-hls_flags",
-            "delete_segments+omit_endlist+program_date_time",
-            "-hls_segment_filename",
-            str(segment),
-            str(index),
-        ]
-        self.last_error = None
-        self.process = subprocess.Popen(
-            command,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.PIPE,
-            env=proxy_env(self.config),
-        )
+        maps = ["-map", "0:v:0", "-map", "0:a:0?"]
+        audio_args = ["-c:a", "aac", "-b:a", "160k", "-ar", "48000", "-ac", "2"]
+        hls_options = {
+            "hls_time": str(self.config.video.hls_time),
+            "hls_list_size": str(self.list_size),
+            "hls_flags": self.hls_flags,
+            "hls_segment_filename": segment.as_posix(),
+        }
+        if recording_path is None:
+            hls_args = [arg for key, value in hls_options.items() for arg in (f"-{key}", value)]
+            return [*maps, *video_args, *audio_args, "-f", "hls", *hls_args, index.as_posix()]
+
+        # Share the mapped video when it is already copied. Preserve the original
+        # audio separately because the player always converts its audio to AAC.
+        archive_video = "v:0"
+        if not copy_video:
+            maps += ["-map", "0:v:0"]
+            video_args += ["-c:v:1", "copy"]
+            archive_video = "v:1"
+        maps += ["-map", "0:a:0?"]
+        audio_args += ["-c:a:1", "copy"]
+        hls = _tee_output(index, f="hls", select="v:0,a:0", **hls_options)
+        archive = _tee_output(recording_path, f="mpegts", select=f"{archive_video},a:1", onfail="ignore")
+        return [*maps, *video_args, *audio_args, "-f", "tee", f"{hls}|{archive}"]
+
+    def _drain_stderr(self, process: subprocess.Popen, *, watch_recording: bool = False) -> None:
+        if process.stderr is None:
+            return
+
+        def read_lines(pipe: BinaryIO, process_errors: deque[str], recording_errors: deque[str]) -> None:
+            with pipe:
+                for raw in pipe:
+                    line = raw.decode("utf-8", errors="replace").strip()
+                    process_errors.append(line)
+                    if watch_recording and "Slave muxer #1 failed" in line:
+                        recording_errors.append(line)
+
+        threading.Thread(
+            target=read_lines,
+            args=(process.stderr, self.process_errors, self.recording_errors),
+            daemon=True,
+        ).start()
 
     def is_running(self) -> bool:
         return self.process is not None and self.process.poll() is None
 
-    def start_streamlink_pipe(self, source_url: str) -> None:
-        if not shutil.which("ffmpeg"):
-            raise RuntimeError("FFmpeg is not installed or not on PATH")
-
-        hls_dir = Path(self.config.runtime.hls_dir)
-        hls_dir.mkdir(parents=True, exist_ok=True)
-        self.stop()
-        self.stop_orphaned_hls_processes()
-        self.clear()
-        index = hls_dir / "index.m3u8"
-        segment = hls_dir / "seg_%06d.ts"
-        video_args = ["-c:v", "copy"] if self.config.video.prefer_copy else [
-            "-c:v",
-            "libx264",
-            "-preset",
-            "veryfast",
-            "-tune",
-            "zerolatency",
-            "-pix_fmt",
-            "yuv420p",
-        ]
-        self.last_error = None
-        self.upstream_process = subprocess.Popen(
-            streamlink_live_command(self.config, source_url),
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            env=proxy_env(self.config),
-        )
-        if self.upstream_process.stdout is None:
-            raise RuntimeError("Streamlink stdout is not available")
-        self.process = subprocess.Popen(
-            [
-                "ffmpeg",
-                "-hide_banner",
-                "-loglevel",
-                "warning",
-                "-i",
-                "pipe:0",
-                "-map",
-                "0:v:0",
-                "-map",
-                "0:a:0?",
-                *video_args,
-                "-c:a",
-                "aac",
-                "-b:a",
-                "160k",
-                "-ar",
-                "48000",
-                "-ac",
-                "2",
-                "-f",
-                "hls",
-                "-hls_time",
-                str(self.config.video.hls_time),
-                "-hls_list_size",
-                str(self.config.video.hls_list_size),
-                "-hls_flags",
-                "delete_segments+omit_endlist+program_date_time",
-                "-hls_segment_filename",
-                str(segment),
-                str(index),
-            ],
-            stdin=self.upstream_process.stdout,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.PIPE,
-        )
-        self.upstream_process.stdout.close()
-
     def stop(self) -> None:
-        if self.process and self.process.poll() is None:
-            self.process.terminate()
-            try:
-                self.process.wait(timeout=3)
-            except subprocess.TimeoutExpired:
-                self.process.kill()
-                self.process.wait(timeout=3)
-        self.process = None
+        self.stream_id = None
+        self.finish_input()
+
+    def finish_input(self) -> None:
         if self.upstream_process and self.upstream_process.poll() is None:
             self.upstream_process.terminate()
             try:
@@ -309,6 +338,20 @@ class HLSBuffer:
             except subprocess.TimeoutExpired:
                 self.upstream_process.kill()
                 self.upstream_process.wait(timeout=3)
+        if self.process and self.process.poll() is None:
+            try:
+                if self.process.stdin:
+                    self.process.stdin.write(b"q\n")
+                    self.process.stdin.flush()
+                self.process.wait(timeout=3)
+            except (OSError, subprocess.TimeoutExpired):
+                self.process.terminate()
+                self.process.wait(timeout=3)
+        if self.process and self.process.stdin:
+            self.process.stdin.close()
+        if self.upstream_process and self.upstream_process.stdout:
+            self.upstream_process.stdout.close()
+        self.process = None
         self.upstream_process = None
 
     def clear(self) -> None:
@@ -330,7 +373,7 @@ class HLSBuffer:
         return len(list(hls_dir.glob("*.ts"))) if hls_dir.exists() else 0
 
     def trim_segments(self, max_segments: int | None = None) -> int:
-        limit = max_segments or self.config.video.hls_list_size + 8
+        limit = max_segments or self.list_size + 8
         if limit <= 0:
             return 0
         hls_dir = Path(self.config.runtime.hls_dir)
@@ -345,14 +388,16 @@ class HLSBuffer:
     def stop_orphaned_hls_processes(self) -> None:
         if os.name != "nt":
             return
-        marker = str(Path(self.config.runtime.hls_dir)).replace("/", "\\")
+        marker = str(self.directory).replace("'", "''")
+        tee_marker = _escape_token(self.directory.as_posix(), "|").replace("'", "''")
         script = (
             "$marker = '"
-            + marker.replace("'", "''")
+            + marker
+            + "'; $teeMarker = '"
+            + tee_marker
             + "'; "
-            "$pidSelf = $PID; "
             "Get-CimInstance Win32_Process -Filter \"name = 'ffmpeg.exe'\" | "
-            "Where-Object { $_.CommandLine -and $_.CommandLine.Contains($marker) } | "
+            "Where-Object { $_.CommandLine -and ($_.CommandLine.Contains($marker) -or $_.CommandLine.Contains($teeMarker)) } | "
             "ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }"
         )
         try:
@@ -368,23 +413,55 @@ class HLSBuffer:
     def status(self) -> dict:
         index = Path(self.config.runtime.hls_dir) / "index.m3u8"
         running = self.is_running()
-        if self.process is not None and not running and self.process.stderr and self.last_error is None:
-            try:
-                error_text = self.process.stderr.read().decode("utf-8", errors="ignore").strip()
-                upstream_error = ""
-                if self.upstream_process is not None and self.upstream_process.stderr:
-                    upstream_error = self.upstream_process.stderr.read().decode("utf-8", errors="ignore").strip()
-                combined = "\n".join(part for part in (error_text, upstream_error) if part)
-                self.last_error = combined[-1200:] if combined else None
-            except Exception:
-                self.last_error = "Unable to read FFmpeg error output"
+        if self.process is not None and not running and self.process.returncode != 0:
+            self.last_error = "\n".join(self.process_errors.copy())[-1200:] or None
+        playlist = self.playlist()
         return {
             "running": running,
             "playlist_exists": index.exists(),
             "playlist": "/hls/index.m3u8",
             "segment_count": self.segment_count(),
             "last_error": self.last_error,
+            "stream_id": self.stream_id,
+            "buffered_seconds": playlist.duration,
+            "first_media_epoch": playlist.fragments[0].start_epoch if playlist.fragments else None,
+            "ended": playlist.ended,
+            "recording": self._recording_status(running),
         }
+
+    def _recording_status(self, running: bool) -> dict:
+        path = self.recording_path
+        error = self.recording_setup_error or next(iter(self.recording_errors.copy()), None)
+        size = 0
+        if path:
+            try:
+                size = path.stat().st_size
+            except FileNotFoundError:
+                pass
+            except OSError as exc:
+                error = error or str(exc)
+
+        if error:
+            state = "failed"
+        elif size:
+            state = "recording" if running else "saved"
+        elif path and running:
+            state = "pending"
+        elif path:
+            state, error = "failed", "此次抓取未写入源视频。"
+        else:
+            state = "idle" if self.config.video.record_source else "disabled"
+        return {"state": state, "path": str(path) if path else None, "bytes": size, "error": error}
+
+
+def _escape_token(value: str, separators: str) -> str:
+    return "".join("\\" + char if char in "\\'" + separators else char for char in value)
+
+
+def _tee_output(path: Path, **options: str) -> str:
+    # FFmpeg parses the slave list before it parses the colon-separated options.
+    args = ":".join(f"{key}={_escape_token(value, ':]')}" for key, value in options.items())
+    return _escape_token(f"[{args}]{path.as_posix()}", "|")
 
 
 def safe_unlink(path: Path, attempts: int = 3, delay_seconds: float = 0.15) -> bool:
@@ -404,107 +481,3 @@ def safe_unlink(path: Path, attempts: int = 3, delay_seconds: float = 0.15) -> b
                 continue
             raise
     return False
-
-
-class AudioExtractor:
-    def __init__(self, config: AppConfig) -> None:
-        self.config = config
-        self.process: subprocess.Popen | None = None
-        self.upstream_process: subprocess.Popen | None = None
-
-    def start(self, source_url: str) -> subprocess.Popen:
-        if not shutil.which("ffmpeg"):
-            raise RuntimeError("FFmpeg is not installed or not on PATH")
-        self.stop()
-        self.process = subprocess.Popen(
-            [
-                "ffmpeg",
-                "-hide_banner",
-                "-loglevel",
-                "warning",
-                "-allowed_extensions",
-                "ALL",
-                "-allowed_segment_extensions",
-                "ALL",
-                "-extension_picky",
-                "0",
-                "-i",
-                source_url,
-                "-vn",
-                "-ac",
-                "1",
-                "-ar",
-                "16000",
-                "-f",
-                "s16le",
-                "pipe:1",
-            ],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            env=proxy_env(self.config),
-        )
-        return self.process
-
-    def start_streamlink_pipe(self, source_url: str) -> subprocess.Popen:
-        if not shutil.which("ffmpeg"):
-            raise RuntimeError("FFmpeg is not installed or not on PATH")
-        self.stop()
-        self.upstream_process = subprocess.Popen(
-            streamlink_live_command(self.config, source_url),
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            env=proxy_env(self.config),
-        )
-        if self.upstream_process.stdout is None:
-            raise RuntimeError("Streamlink stdout is not available")
-        self.process = subprocess.Popen(
-            [
-                "ffmpeg",
-                "-hide_banner",
-                "-loglevel",
-                "warning",
-                "-i",
-                "pipe:0",
-                "-vn",
-                "-ac",
-                "1",
-                "-ar",
-                "16000",
-                "-f",
-                "s16le",
-                "pipe:1",
-            ],
-            stdin=self.upstream_process.stdout,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-        )
-        self.upstream_process.stdout.close()
-        return self.process
-
-    def stop(self) -> None:
-        if self.process and self.process.poll() is None:
-            self.process.terminate()
-            try:
-                self.process.wait(timeout=3)
-            except subprocess.TimeoutExpired:
-                self.process.kill()
-                self.process.wait(timeout=3)
-        self.process = None
-        if self.upstream_process and self.upstream_process.poll() is None:
-            self.upstream_process.terminate()
-            try:
-                self.upstream_process.wait(timeout=3)
-            except subprocess.TimeoutExpired:
-                self.upstream_process.kill()
-                self.upstream_process.wait(timeout=3)
-        self.upstream_process = None
-
-    def status(self) -> dict:
-        process_running = self.process is not None and self.process.poll() is None
-        upstream_running = self.upstream_process is not None and self.upstream_process.poll() is None
-        return {
-            "process_running": process_running,
-            "upstream_running": upstream_running,
-            "process_returncode": None if self.process is None else self.process.poll(),
-            "upstream_returncode": None if self.upstream_process is None else self.upstream_process.poll(),
-        }

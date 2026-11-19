@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 import time
 from dataclasses import dataclass
 from uuid import uuid4
@@ -16,6 +17,8 @@ from app.services.terminology_manager import TerminologyManager
 class ASRResult:
     text: str
     language: str | None
+    start_seconds: float = 0.0
+    end_seconds: float | None = None
 
 
 class ASRWorker:
@@ -49,11 +52,13 @@ class ASRWorker:
         )
         audio = np.frombuffer(audio_bytes, dtype=np.int16).astype(np.float32) / 32768.0
         result = await asyncio.to_thread(self._transcribe_sync, model, audio, hotwords)
+        speech_start = min(ended_at, started_at + result.start_seconds)
+        speech_end = ended_at if result.end_seconds is None else min(ended_at, started_at + result.end_seconds)
         return TranscriptSegment(
             id=str(uuid4()),
             source_text=result.text,
-            start_monotonic=started_at,
-            end_monotonic=ended_at,
+            start_monotonic=speech_start,
+            end_monotonic=max(speech_start, speech_end),
             language=result.language,
             asr_latency=time.perf_counter() - started,
         )
@@ -74,15 +79,20 @@ class ASRWorker:
             compression_ratio_threshold=2.4,
         )
         accepted_texts: list[str] = []
+        start_seconds = None
+        end_seconds = None
         for segment in segments:
             text = segment.text.strip()
             if should_drop_segment(text, segment, language):
                 continue
             accepted_texts.append(text)
+            if start_seconds is None:
+                start_seconds = segment.start
+            end_seconds = segment.end
         source_text = " ".join(accepted_texts).strip()
         if is_repetitive_hallucination(source_text) or is_garbage_transcript(source_text, language):
             source_text = ""
-        return ASRResult(text=source_text, language=getattr(info, "language", language))
+        return ASRResult(source_text, getattr(info, "language", language), start_seconds or 0.0, end_seconds)
 
     def _effective_language(self) -> str | None:
         if self.config.asr.language:
@@ -93,6 +103,12 @@ class ASRWorker:
 
     def _get_model(self):
         if self._model is None:
+            cuda_library_dir = self.config.asr.cuda_library_dir
+            if os.name == "nt" and self.config.asr.device == "cuda" and cuda_library_dir:
+                # CTranslate2 resolves CUDA DLLs through the Windows process PATH.
+                process_path = os.environ.get("PATH", "")
+                if process_path.split(os.pathsep, 1)[0] != cuda_library_dir:
+                    os.environ["PATH"] = f"{cuda_library_dir}{os.pathsep}{process_path}"
             try:
                 from faster_whisper import WhisperModel
             except ImportError as exc:

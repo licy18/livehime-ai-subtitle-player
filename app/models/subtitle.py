@@ -10,6 +10,9 @@ class TranscriptSegment(BaseModel):
     end_monotonic: float
     language: str | None = None
     asr_latency: float = 0.0
+    stream_id: str | None = None
+    media_start: float | None = None
+    media_end: float | None = None
 
 
 class TranslationResult(BaseModel):
@@ -25,6 +28,9 @@ class SubtitleEvent(BaseModel):
     id: str
     show_at: float
     hide_at: float
+    stream_id: str | None = None
+    media_show_at: float | None = None
+    media_hide_at: float | None = None
     source_text: str
     normalized_text: str
     text: str

@@ -1,10 +1,19 @@
 const video = document.querySelector("#video");
+const stage = video.closest(".stage");
 const subtitle = document.querySelector("#subtitle");
+const fullscreenButton = document.querySelector("#stage-fullscreen");
+fullscreenButton.hidden = !document.fullscreenEnabled;
+fullscreenButton.addEventListener("click", () => {
+  stage.requestFullscreen().catch((error) => console.warn("无法进入播放器全屏", error));
+});
+document.addEventListener("fullscreenchange", positionSubtitle);
 const log = document.querySelector("#subtitle-log");
 const statusNodes = {
   input: document.querySelector("#input-status"),
   ws: document.querySelector("#ws-status"),
   hls: document.querySelector("#hls-status"),
+  recording: document.querySelector("#recording-status"),
+  recordingSubtitles: document.querySelector("#recording-subtitles-status"),
   asr: document.querySelector("#asr-status"),
   delay: document.querySelector("#delay-status"),
   terms: document.querySelector("#terms-status"),
@@ -26,12 +35,28 @@ const configMessage = document.querySelector("#config-message");
 const diagnosticsOutput = document.querySelector("#diagnostics-output");
 const historyList = document.querySelector("#history-list");
 const qualitySelect = document.querySelector("#quality-select");
+const captureMode = new URLSearchParams(location.search).get("capture") === "1";
+document.body.classList.toggle("capture-mode", captureMode);
+if (captureMode) {
+  document.title = "LiveHime Capture";
+  video.defaultMuted = false;
+  video.muted = false;
+  const enableAudio = document.querySelector("#enable-capture-audio");
+  enableAudio.addEventListener("click", () => {
+    video.muted = false;
+    video.play().catch(() => {});
+  });
+  video.addEventListener("volumechange", () => { enableAudio.hidden = !video.muted; });
+}
 let currentConfig = null;
 let activeWebSocket = null;
 let subtitleClearTimer = null;
 let subtitleVersion = 0;
 let backendStartedAt = null;
 let hlsInstance = null;
+let activeStreamId = null;
+let activeCueId = null;
+const mediaSubtitles = new Map();
 
 async function loadConfig() {
   const response = await fetch("/api/config");
@@ -39,8 +64,8 @@ async function loadConfig() {
   currentConfig = config;
   fillConfigForm(config);
   applySubtitleStyle(config);
-  statusNodes.delay.textContent = `${config.video.delay_seconds}s`;
-  statusNodes.input.textContent = `${config.input.resolver}: ${shorten(config.input.url, 34)}`;
+  statusNodes.delay.textContent = `${config.video.delay_seconds} 秒`;
+  statusNodes.input.textContent = shorten(config.input.url, 42);
 }
 
 async function rememberBackendInstance() {
@@ -56,16 +81,37 @@ async function rememberBackendInstance() {
 async function loadStatus() {
   const response = await fetch("/api/status");
   const status = await response.json();
-  statusNodes.input.textContent = status.source_url ? shorten(status.source_url, 42) : "-";
-  statusNodes.hls.textContent = status.hls.playlist_exists ? "playlist ready" : "waiting";
-  statusNodes.asr.textContent = status.asr.running
-    ? `${status.asr.provider} running`
-    : `${status.asr.provider} stopped`;
+  if (activeStreamId && status.hls.stream_id !== activeStreamId) resetVideo();
+  if (captureMode && currentConfig && status.hls.stream_id && !activeStreamId) {
+    void startVideo(status.hls.stream_id);
+  }
+  const sourceUrl = status.source_url || currentConfig?.input.url;
+  statusNodes.input.textContent = sourceUrl ? shorten(sourceUrl, 42) : "-";
+  statusNodes.hls.textContent = status.hls.playlist_exists ? "播放列表已就绪" : "待机";
+  const recording = status.hls.recording;
+  if (recording) {
+    const labels = { disabled: "关闭", idle: "待机", pending: "等待源流", recording: "录制中", saved: "已保存", failed: "录制异常" };
+    const size = recording.bytes ? ` · ${(recording.bytes / 1024 ** 2).toFixed(1)} MB` : "";
+    statusNodes.recording.textContent = (labels[recording.state] || "待机") + size;
+    statusNodes.recording.title = [recording.path, recording.error].filter(Boolean).join("\n");
+  }
+  const archive = status.recording_subtitles;
+  if (archive) {
+    const ja = archive.tracks.ja;
+    const zh = archive.tracks["zh-CN"];
+    const statusText = archive.finishing ? "正在保存末尾字幕 · " : "";
+    const files = `日语 ${ja.cues} 条 · 中文 ${zh.cues} 条`;
+    const warning = archive.error ? " · 写入异常" : archive.missing_fragments ? " · 部分分片未识别" : "";
+    statusNodes.recordingSubtitles.textContent = statusText + files + warning;
+    statusNodes.recordingSubtitles.title = [ja.path, zh.path, archive.error].filter(Boolean).join("\n");
+  } else {
+    statusNodes.recordingSubtitles.textContent = "待机";
+    statusNodes.recordingSubtitles.title = "";
+  }
+  statusNodes.asr.textContent = status.asr.running ? "运行中" : "待机";
   statusNodes.terms.textContent = status.terms;
-  statusNodes.asrLatency.textContent =
-    status.asr.last_asr_latency == null ? "-" : `${status.asr.last_asr_latency.toFixed(2)}s`;
-  statusNodes.translationLatency.textContent =
-    status.asr.last_translation_latency == null ? "-" : `${status.asr.last_translation_latency.toFixed(2)}s`;
+  statusNodes.asrLatency.textContent = formatLatency(status.asr.last_asr_latency);
+  statusNodes.translationLatency.textContent = formatLatency(status.asr.last_translation_latency);
   statusNodes.termsHit.textContent = status.asr.last_terms_hit ?? "-";
   statusNodes.error.textContent = status.last_error || status.hls.last_error || "-";
   statusNodes.queueAudio.textContent = status.queues?.audio ?? 0;
@@ -74,14 +120,10 @@ async function loadStatus() {
   statusNodes.queueSubtitle.textContent = status.queues?.subtitle ?? 0;
   const dropped = status.queues?.dropped || {};
   statusNodes.queueDropped.textContent = Object.values(dropped).reduce((sum, value) => sum + value, 0);
-  statusNodes.asrAvg.textContent =
-    status.queues?.asr_avg_latency == null ? "-" : `${status.queues.asr_avg_latency.toFixed(2)}s`;
-  statusNodes.translationAvg.textContent =
-    status.queues?.translation_avg_latency == null
-      ? "-"
-      : `${status.queues.translation_avg_latency.toFixed(2)}s`;
+  statusNodes.asrAvg.textContent = formatLatency(status.queues?.asr_avg_latency);
+  statusNodes.translationAvg.textContent = formatLatency(status.queues?.translation_avg_latency);
   if (status.asr.last_source_text) {
-    sourceLog.textContent = `Source: ${status.asr.last_source_text}\nNormalized: ${
+    sourceLog.textContent = `识别原文　${status.asr.last_source_text}\n术语归一化　${
       status.asr.last_normalized_text || "-"
     }`;
   }
@@ -91,11 +133,13 @@ async function loadHistory() {
   const response = await fetch("/api/subtitles/history", { cache: "no-store" });
   const items = await response.json();
   renderHistory(items);
+  for (const item of items) bufferMediaSubtitle(item);
+  syncMediaSubtitle();
 }
 
 function renderHistory(items) {
   if (!items.length) {
-    historyList.textContent = "No subtitles yet.";
+    historyList.textContent = "暂无字幕。";
     return;
   }
   historyList.replaceChildren(
@@ -107,17 +151,17 @@ function renderHistory(items) {
         <div class="history-text">${escapeHtml(item.text || "")}</div>
         <div class="history-source">${escapeHtml(item.source_text || "")}</div>
         <div class="history-meta">
-          <span>terms ${escapeHtml(String(item.terms_hit ?? 0))}: ${escapeHtml(terms)}</span>
-          <span>asr ${formatLatency(item.asr_latency)}</span>
-          <span>tr ${formatLatency(item.translation_latency)}</span>
+          <span>术语命中 ${escapeHtml(String(item.terms_hit ?? 0))} 条　${escapeHtml(terms)}</span>
+          <span>识别 ${formatLatency(item.asr_latency)}</span>
+          <span>翻译 ${formatLatency(item.translation_latency)}</span>
           ${item.error_type ? `<span class="error-chip">${escapeHtml(item.error_type)}</span>` : ""}
         </div>
         <div class="toolbar mini-toolbar">
-          <button type="button" data-copy-source="${escapeAttr(item.source_text || "")}">Copy source</button>
-          <button type="button" data-copy-source="${escapeAttr(item.text || "")}">Copy subtitle</button>
+          <button type="button" data-copy-source="${escapeAttr(item.source_text || "")}">复制原文</button>
+          <button type="button" data-copy-source="${escapeAttr(item.text || "")}">复制字幕</button>
           <button type="button" data-term-source="${escapeAttr(item.source_text || "")}" data-term-zh="${escapeAttr(
             item.text || "",
-          )}">Use as term</button>
+          )}">用作术语</button>
         </div>
       `;
       node.querySelectorAll("[data-copy-source]").forEach((button) => {
@@ -138,7 +182,7 @@ function renderHistory(items) {
 }
 
 function formatLatency(value) {
-  return value == null ? "-" : `${Number(value).toFixed(2)}s`;
+  return value == null ? "-" : `${Number(value).toFixed(2)} 秒`;
 }
 
 function escapeHtml(text) {
@@ -159,6 +203,7 @@ function fillConfigForm(config) {
   setField("network.proxy_enabled", String(config.network.proxy_enabled));
   setField("network.proxy_url", config.network.proxy_url);
   setField("video.delay_seconds", config.video.delay_seconds);
+  setField("video.record_source", String(config.video.record_source));
   setField("subtitle.extra_offset_seconds", config.subtitle.extra_offset_seconds);
   setField("subtitle.bottom_percent", config.subtitle.bottom_percent);
   setField("subtitle.font_size_px", config.subtitle.font_size_px);
@@ -172,6 +217,8 @@ function fillConfigForm(config) {
   setField("asr.language", config.asr.language || "");
   setField("translation.provider", config.translation.provider);
   setField("translation.deepseek_v4.model", config.translation.deepseek_v4.model);
+  setField("translation.deepseek_v4.thinking_enabled", String(config.translation.deepseek_v4.thinking_enabled ?? ""));
+  setField("translation.program_context", config.translation.program_context ?? "");
 }
 
 function setField(name, value) {
@@ -180,13 +227,14 @@ function setField(name, value) {
 }
 
 function setQualityOptions(qualities, selected) {
+  const labels = { best: "最高可用画质", worst: "最低可用画质", direct: "原始画质（直接读取）" };
   const unique = [...new Set(qualities.filter(Boolean))];
   if (!unique.includes(selected)) unique.unshift(selected);
   qualitySelect.replaceChildren(
     ...unique.map((quality) => {
       const option = document.createElement("option");
       option.value = quality;
-      option.textContent = quality;
+      option.textContent = Object.hasOwn(labels, quality) ? labels[quality] : quality;
       option.selected = quality === selected;
       return option;
     }),
@@ -201,6 +249,7 @@ function readConfigForm() {
   next.network.proxy_enabled = getString("network.proxy_enabled") === "true";
   next.network.proxy_url = getString("network.proxy_url");
   next.video.delay_seconds = getNumber("video.delay_seconds");
+  next.video.record_source = getString("video.record_source") === "true";
   next.subtitle.extra_offset_seconds = getNumber("subtitle.extra_offset_seconds");
   next.subtitle.bottom_percent = getNumber("subtitle.bottom_percent");
   next.subtitle.font_size_px = getInteger("subtitle.font_size_px");
@@ -214,6 +263,9 @@ function readConfigForm() {
   next.asr.language = getString("asr.language") || null;
   next.translation.provider = getString("translation.provider");
   next.translation.deepseek_v4.model = getString("translation.deepseek_v4.model");
+  const thinking = getString("translation.deepseek_v4.thinking_enabled");
+  next.translation.deepseek_v4.thinking_enabled = thinking === "" ? null : thinking === "true";
+  next.translation.program_context = getString("translation.program_context");
   return next;
 }
 
@@ -236,6 +288,10 @@ function shorten(text, maxLength) {
 
 function applySubtitleStyle(config) {
   subtitle.style.fontSize = `${config.subtitle.font_size_px}px`;
+  if (captureMode) {
+    const bottomPercent = config.subtitle.bottom_percent ?? 18;
+    subtitle.style.setProperty("--subtitle-top", `${100 - bottomPercent}%`);
+  }
   positionSubtitle();
 }
 
@@ -256,10 +312,10 @@ function videoContentRect() {
 }
 
 function positionSubtitle() {
-  if (!currentConfig) return;
+  if (!currentConfig || captureMode) return;
   const rect = videoContentRect();
   const bottomPercent = currentConfig.subtitle.bottom_percent ?? 18;
-  const top = rect.top + rect.height * (1 - bottomPercent / 100);
+  const top = rect.top - stage.getBoundingClientRect().top + rect.height * (1 - bottomPercent / 100);
   subtitle.style.top = `${top}px`;
   subtitle.style.width = `${Math.min(rect.width * 0.92, window.innerWidth * 0.92)}px`;
 }
@@ -284,6 +340,9 @@ async function waitForBackend() {
 }
 
 function resetVideo() {
+  activeStreamId = null;
+  activeCueId = null;
+  mediaSubtitles.clear();
   if (hlsInstance) {
     hlsInstance.destroy();
     hlsInstance = null;
@@ -299,11 +358,17 @@ function resetVideo() {
   }
 }
 
-async function waitForPlaylist() {
-  for (let attempt = 0; attempt < 30; attempt += 1) {
+async function waitForPlaylist(streamId, delay) {
+  const finishBy = performance.now() + (delay + 35) * 1000;
+  while (activeStreamId === streamId && performance.now() < finishBy) {
     try {
-      const response = await fetch(`/hls/index.m3u8?probe=${Date.now()}`, { cache: "no-store" });
-      if (response.ok) return true;
+      const response = await fetch("/api/status", { cache: "no-store" });
+      const { hls } = await response.json();
+      if (hls.stream_id !== streamId) return false;
+      if (!hls.running && !hls.ended) return false;
+      const oldEnough = hls.first_media_epoch != null && Date.now() / 1000 >= hls.first_media_epoch + delay;
+      if (oldEnough && (hls.buffered_seconds > delay || hls.ended)) return true;
+      statusNodes.hls.textContent = `缓冲中 ${hls.buffered_seconds.toFixed(1)} / ${delay} 秒`;
     } catch {
       // Playlist may not exist yet.
     }
@@ -312,20 +377,80 @@ async function waitForPlaylist() {
   return false;
 }
 
-async function startVideo() {
+async function startVideo(streamId) {
+  if (!currentConfig) await loadConfig();
+  if (!streamId || activeStreamId === streamId) return;
   resetVideo();
-  const ready = await waitForPlaylist();
+  activeStreamId = streamId;
+  const delay = Math.max(0.5, currentConfig.video.delay_seconds);
+  const ready = await waitForPlaylist(streamId, delay);
+  if (activeStreamId !== streamId) return;
   if (!ready) {
-    statusNodes.error.textContent = "HLS playlist is not ready yet.";
+    resetVideo();
+    statusNodes.error.textContent = "HLS 播放列表尚未就绪。";
     return;
   }
-  const src = `/hls/index.m3u8?ts=${Date.now()}`;
+  const src = `/hls/index.m3u8?stream=${streamId}`;
+  if (captureMode) {
+    video.addEventListener("loadeddata", async () => {
+      if (activeStreamId !== streamId) return;
+      try {
+        await video.play();
+      } catch (error) {
+        if (error.name === "NotAllowedError" && activeStreamId === streamId && !video.muted) {
+          video.muted = true;
+          await video.play().catch(() => {});
+        }
+      }
+    }, { once: true });
+  }
   if (window.Hls && Hls.isSupported()) {
-    hlsInstance = new Hls({ liveSyncDurationCount: 3 });
+    hlsInstance = new Hls({ liveSyncDuration: delay, lowLatencyMode: false });
     hlsInstance.loadSource(src);
     hlsInstance.attachMedia(video);
   } else if (video.canPlayType("application/vnd.apple.mpegurl")) {
     video.src = src;
+    video.addEventListener("loadedmetadata", () => {
+      if (activeStreamId === streamId && !Number.isFinite(video.duration) && video.seekable.length) {
+        const end = video.seekable.end(video.seekable.length - 1);
+        video.currentTime = Math.max(video.seekable.start(0), end - delay);
+      }
+    }, { once: true });
+  }
+  void loadHistory();
+}
+
+function bufferMediaSubtitle(payload) {
+  if (payload.stream_id !== activeStreamId || !Number.isFinite(payload.media_show_at)) return;
+  mediaSubtitles.set(payload.id, payload);
+}
+
+function playingEpoch() {
+  const hlsDate = hlsInstance?.playingDate;
+  if (hlsDate) return hlsDate.getTime() / 1000;
+  const nativeStart = video.getStartDate?.();
+  return nativeStart ? nativeStart.getTime() / 1000 + video.currentTime : NaN;
+}
+
+function syncMediaSubtitle() {
+  if (!activeStreamId || video.readyState < 2) return;
+  const position = playingEpoch();
+  if (!Number.isFinite(position)) return;
+  let current = null;
+  for (const [id, cue] of mediaSubtitles) {
+    if (cue.media_hide_at < position - 150) mediaSubtitles.delete(id);
+    if (cue.media_show_at <= position && position < cue.media_hide_at &&
+        (!current || cue.media_show_at > current.media_show_at)) current = cue;
+  }
+  if ((current?.id ?? null) === activeCueId) return;
+  activeCueId = current?.id ?? null;
+  if (current) {
+    clearTimeout(subtitleClearTimer);
+    subtitleClearTimer = null;
+    renderSubtitle(current.text, current.source_text);
+    positionSubtitle();
+  } else {
+    clearSubtitle();
   }
 }
 
@@ -336,26 +461,33 @@ function connectEvents() {
   const ws = new WebSocket(`ws://${location.host}/ws/events`);
   activeWebSocket = ws;
   ws.addEventListener("open", () => {
-    statusNodes.ws.textContent = "connected";
+    statusNodes.ws.textContent = "已连接";
+    void loadHistory();
   });
   ws.addEventListener("close", () => {
     if (activeWebSocket === ws) {
-      statusNodes.ws.textContent = "closed";
+      statusNodes.ws.textContent = "已断开";
       setTimeout(connectEvents, 1500);
     }
   });
   ws.addEventListener("message", (event) => {
     const payload = JSON.parse(event.data);
     if (payload.type === "subtitle") {
+      const logText = `${payload.text || ""}\n${payload.source_text || ""}`;
+      log.textContent = `${logText}\n\n${log.textContent}`.slice(0, 1200);
+      if (payload.stream_id) {
+        bufferMediaSubtitle(payload);
+        syncMediaSubtitle();
+        return;
+      }
       subtitleVersion += 1;
+      activeCueId = null;
       const currentVersion = subtitleVersion;
       if (subtitleClearTimer) {
         clearTimeout(subtitleClearTimer);
         subtitleClearTimer = null;
       }
       renderSubtitle(payload.text || "", payload.source_text || "");
-      const logText = `${payload.text || ""}\n${payload.source_text || ""}`;
-      log.textContent = `${logText}\n\n${log.textContent}`.slice(0, 1200);
       positionSubtitle();
       const minDisplayMs = Math.max(500, (currentConfig?.subtitle?.min_display_seconds ?? 1.5) * 1000);
       const maxDisplayMs = Math.max(minDisplayMs, (currentConfig?.subtitle?.max_display_seconds ?? 8) * 1000);
@@ -398,8 +530,8 @@ function clearSubtitle() {
 }
 
 document.querySelector("#start-hls").addEventListener("click", async () => {
-  await fetch("/api/runtime/start-hls", { method: "POST" });
-  await startVideo();
+  const response = await fetch("/api/runtime/start-hls", { method: "POST" });
+  if (response.ok) void startVideo((await response.json()).stream_id);
   await loadStatus();
 });
 
@@ -414,8 +546,14 @@ document.querySelector("#mock-loop").addEventListener("click", async () => {
 });
 
 document.querySelector("#start-asr").addEventListener("click", async () => {
-  await fetch("/api/runtime/start-asr", { method: "POST" });
+  const response = await fetch("/api/runtime/start-asr", { method: "POST" });
+  if (response.ok) void startVideo((await response.json()).hls.stream_id);
   await loadStatus();
+});
+
+document.querySelector("#capture-view").addEventListener("click", (event) => {
+  event.preventDefault();
+  window.open(event.currentTarget.href, "_blank", "popup,noopener,width=1280,height=720");
 });
 
 document.querySelector("#stop-runtime").addEventListener("click", async () => {
@@ -436,9 +574,9 @@ document.querySelector("#clear-history").addEventListener("click", async () => {
 });
 
 document.querySelector("#reload-config").addEventListener("click", async () => {
-  configMessage.textContent = "Reloading configuration...";
+  configMessage.textContent = "正在重新载入配置…";
   await loadConfig();
-  configMessage.textContent = "Configuration reloaded.";
+  configMessage.textContent = "配置已重新载入。";
 });
 
 document.querySelector("#refresh-qualities").addEventListener("click", async () => {
@@ -448,7 +586,7 @@ document.querySelector("#refresh-qualities").addEventListener("click", async () 
 async function refreshQualities() {
   if (!currentConfig) return;
   const currentQuality = getString("input.quality") || currentConfig.input.quality || "best";
-  configMessage.textContent = "Loading available qualities...";
+  configMessage.textContent = "正在查询可用画质…";
   try {
     const response = await fetch("/api/input/qualities", {
       method: "POST",
@@ -467,76 +605,76 @@ async function refreshQualities() {
     });
     const data = await response.json();
     if (!response.ok || !data.ok) {
-      throw new Error(data.detail || data.error || "Unable to load qualities.");
+      throw new Error(data.detail || data.error || "未获取到可用画质。");
     }
     const selected = data.qualities.includes(currentQuality) ? currentQuality : data.selected || "best";
     setQualityOptions(data.qualities, selected);
     configMessage.textContent = data.warnings?.length
-      ? `Loaded qualities. ${data.warnings[data.warnings.length - 1]}`
-      : "Loaded available qualities.";
+      ? `已更新画质选项。${data.warnings[data.warnings.length - 1]}`
+      : "已更新画质选项。";
   } catch (error) {
     setQualityOptions([currentQuality, "best", "worst"], currentQuality);
-    configMessage.textContent = `Quality lookup failed: ${error.message || error}`;
+    configMessage.textContent = `查询画质失败。${error.message || error}`;
   }
 }
 
 document.querySelector("#run-diagnostics").addEventListener("click", async () => {
-  diagnosticsOutput.textContent = "Running diagnostics...";
+  diagnosticsOutput.textContent = "正在运行诊断…";
   try {
     const response = await fetch("/api/diagnostics", { cache: "no-store" });
     const data = await response.json();
     diagnosticsOutput.textContent = formatDiagnostics(data);
   } catch (error) {
-    diagnosticsOutput.textContent = `Diagnostics failed: ${error}`;
+    diagnosticsOutput.textContent = `诊断失败。${error}`;
   }
 });
 
 document.querySelector("#test-deepseek").addEventListener("click", async () => {
-  diagnosticsOutput.textContent = "Testing DeepSeek...";
+  diagnosticsOutput.textContent = "正在测试 DeepSeek…";
   try {
     const response = await fetch("/api/diagnostics/deepseek-test", { method: "POST" });
     const data = await response.json();
     diagnosticsOutput.textContent = formatDeepSeekTest(data);
   } catch (error) {
-    diagnosticsOutput.textContent = `DeepSeek test failed: ${error}`;
+    diagnosticsOutput.textContent = `DeepSeek 测试失败。${error}`;
   }
 });
 
 function formatDiagnostics(data) {
   const lines = [];
-  lines.push(`Python: ${data.python.version}`);
-  lines.push(`FFmpeg: ${data.tools.ffmpeg.ok ? data.tools.ffmpeg.version : data.tools.ffmpeg.error}`);
-  lines.push(`Streamlink: ${data.tools.streamlink.ok ? data.tools.streamlink.version : data.tools.streamlink.error}`);
-  lines.push(`Proxy: ${data.network.proxy_enabled ? data.network.proxy_url : "off"}`);
-  lines.push(`Proxy env: ${data.network.proxy_env_active ? "active" : "inactive"}`);
-  lines.push(`Input: ${data.input.resolver} ${data.input.url}`);
+  lines.push(`Python　${data.python.version}`);
+  lines.push(`FFmpeg　${data.tools.ffmpeg.ok ? data.tools.ffmpeg.version : data.tools.ffmpeg.error}`);
+  lines.push(`Streamlink　${data.tools.streamlink.ok ? data.tools.streamlink.version : data.tools.streamlink.error}`);
+  lines.push(`代理　${data.network.proxy_enabled ? data.network.proxy_url : "关闭"}`);
+  lines.push(`代理环境变量　${data.network.proxy_env_active ? "已启用" : "未启用"}`);
+  lines.push(`节目源　${data.input.resolver === "direct" ? "直接读取媒体" : "Streamlink"}　${data.input.url}`);
   lines.push(
-    `Resolve: ${data.input.resolution.ok ? "ok" : "failed"}${
+    `节目源解析　${data.input.resolution.ok ? "成功" : "失败"}${
       data.input.resolution.error ? ` - ${data.input.resolution.error}` : ""
     }`,
   );
-  lines.push(`Translation: ${data.translation.provider}`);
-  lines.push(`DeepSeek Key: ${data.translation.deepseek_api_key_present ? "present" : "missing"}`);
-  lines.push(`HLS: playlist=${data.hls.playlist_exists}, segments=${data.hls.segment_count}`);
-  return lines.join("\\n");
+  lines.push(`翻译服务　${data.translation.provider === "mock" ? "模拟翻译" : "DeepSeek V4"}`);
+  lines.push(`DeepSeek 密钥　${data.translation.deepseek_api_key_present ? "已配置" : "未配置"}`);
+  lines.push(`HLS　${data.hls.playlist_exists ? "已生成播放列表" : "暂无播放列表"}，${data.hls.segment_count} 个分片`);
+  return lines.join("\n");
 }
 
 function formatDeepSeekTest(data) {
   if (data.ok) {
-    return `DeepSeek: ok\nModel: ${data.model}\nLatency: ${data.latency}s\nResult: ${data.text}`;
+    return `DeepSeek 连通\n模型　${data.model}\n耗时　${formatLatency(data.latency)}\n结果　${data.text}`;
   }
-  return `DeepSeek: failed\nModel: ${data.model || "-"}\nType: ${data.error_type}\nLatency: ${
-    data.latency ?? "-"
-  }s\nError: ${data.error}`;
+  return `DeepSeek 测试失败\n模型　${data.model || "-"}\n错误类型　${data.error_type}\n耗时　${formatLatency(
+    data.latency,
+  )}\n错误详情　${data.error}`;
 }
 
 configForm.addEventListener("submit", async (event) => {
   event.preventDefault();
   if (!currentConfig) {
-    configMessage.textContent = "Configuration is still loading.";
+    configMessage.textContent = "配置仍在加载。";
     return;
   }
-  configMessage.textContent = "Saving and restarting backend...";
+  configMessage.textContent = "正在保存并重启播放器服务…";
   const payload = readConfigForm();
   const response = await fetch("/api/runtime/save-config-and-restart", {
     method: "POST",
@@ -549,17 +687,17 @@ configForm.addEventListener("submit", async (event) => {
   }
   const restored = await waitForBackend();
   if (restored) {
-    configMessage.textContent = "Backend restarted.";
+    configMessage.textContent = "配置已保存，播放器服务已重启。";
     await loadConfig();
     await loadStatus();
     resetVideo();
     connectEvents();
   } else {
-    configMessage.textContent = "Backend did not come back within 30 seconds.";
+    configMessage.textContent = "播放器服务在 30 秒内未恢复连接。";
   }
 });
 
-loadConfig().then(refreshQualities);
+loadConfig().then(() => captureMode ? loadStatus() : refreshQualities());
 rememberBackendInstance();
 loadStatus();
 loadHistory();
@@ -569,3 +707,13 @@ setInterval(loadHistory, 3000);
 window.addEventListener("resize", positionSubtitle);
 video.addEventListener("loadedmetadata", positionSubtitle);
 video.addEventListener("play", positionSubtitle);
+for (const event of ["timeupdate", "seeked", "playing", "loadeddata"]) {
+  video.addEventListener(event, syncMediaSubtitle);
+}
+if (video.requestVideoFrameCallback) {
+  const renderFrameSubtitle = () => {
+    syncMediaSubtitle();
+    video.requestVideoFrameCallback(renderFrameSubtitle);
+  };
+  video.requestVideoFrameCallback(renderFrameSubtitle);
+}

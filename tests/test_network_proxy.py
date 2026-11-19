@@ -24,10 +24,12 @@ def test_hls_buffer_passes_proxy_env(monkeypatch, tmp_path):
 
     monkeypatch.setattr("shutil.which", lambda name: "ffmpeg")
 
-    def fake_popen(command, stdout=None, stderr=None, env=None):
+    def fake_popen(command, stdin=None, stdout=None, stderr=None, env=None):
         captured["env"] = env
 
         class FakeProcess:
+            stderr = None
+
             def poll(self):
                 return None
 

@@ -16,6 +16,7 @@ video:
   hls_time: 1
   hls_list_size: 120
   prefer_copy: true
+  record_source: false
 
 subtitle:
   extra_offset_seconds: 0
@@ -33,6 +34,7 @@ asr:
   model: "small"
   device: "cpu"
   compute_type: "int8"
+  cuda_library_dir: null
   beam_size: 1
   language: null
   initial_prompt_terms: 80
@@ -56,10 +58,12 @@ asr:
 translation:
   provider: "mock"
   target_language: "zh-CN"
+  program_context: ""
   repair_strategy: "rule_only"
   deepseek_v4:
     base_url: "https://api.deepseek.com"
     model: "deepseek-v4-flash"
+    thinking_enabled: null
     timeout_seconds: 8
     retries: 1
     temperature: 0.1
@@ -75,6 +79,7 @@ glossary:
 runtime:
   runtime_dir: "app/runtime"
   hls_dir: "app/runtime/hls"
+  source_recordings_dir: "app/runtime/recordings"
   live_terms_db: "app/runtime/live_terms.sqlite3"
   unknown_terms_log: "app/runtime/unknown_terms.log"
   subtitle_failures_log: "app/runtime/subtitle_failures.log"

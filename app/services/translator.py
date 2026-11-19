@@ -13,6 +13,7 @@ from app.core.config import AppConfig, httpx_proxy
 from app.core.env import refresh_env_var_from_windows
 from app.models.subtitle import TranslationResult
 from app.models.term import Term
+from app.services.terminology_manager import has_exact_source, normalize_match_text
 
 
 class Translator(ABC):
@@ -123,8 +124,10 @@ class DeepSeekV4Translator(Translator):
         recent_context: list[str],
         strict_retry: bool = False,
     ) -> dict[str, Any]:
+        transcript = normalize_match_text(normalized_text or source_text)
         user_payload = {
             "task": "translate_live_game_subtitle",
+            "program_context": self.config.translation.program_context,
             "source_text": source_text,
             "normalized_text": normalized_text,
             "source_language": source_language or "auto",
@@ -143,6 +146,7 @@ class DeepSeekV4Translator(Translator):
                     "aliases": term.aliases,
                     "zh_cn": term.zh_cn,
                     "notes": term.notes,
+                    "match_type": "exact" if has_exact_source(term, transcript) else "fuzzy",
                 }
                 for term in candidate_terms
             ],
@@ -155,7 +159,7 @@ class DeepSeekV4Translator(Translator):
             if strict_retry
             else ""
         )
-        return {
+        payload: dict[str, Any] = {
             "model": self.deepseek.model,
             "temperature": self.deepseek.temperature,
             "max_tokens": self.deepseek.max_tokens,
@@ -173,7 +177,11 @@ class DeepSeekV4Translator(Translator):
                         "2. JSON 必须包含 zh、terms_used、uncertain_terms 三个字段。\n"
                         "3. zh 必须是简体中文译文，禁止原样复制韩语、日语、泰语或英语。\n"
                         "4. source_text 如果包含乱码或 ASR 轻微错误，也要根据上下文尽量翻译成中文，不要输出原文。\n"
-                        "5. candidate_terms 命中时必须使用对应 zh_cn 官方简中术语。\n"
+                        "5. match_type=exact 的候选使用对应 zh_cn。match_type=fuzzy 来自 ASR 相似片段，"
+                        "仅在语境支持同一术语时采用；有疑问则保留句意并把术语 ID 放进 uncertain_terms。\n"
+                        "6. program_context 是节目背景，recent_context 是按时间排列的先前 ASR 原文，可能有误。"
+                        "两者仅用于理解当前句的指代、接续及同音误识别。只翻译当前句，不复述前文，不凭空补全。"
+                        "普通词义通顺时保留原义，有充分语境证据才按节目专名纠正。\n"
                         '正确格式示例：{"zh":"这个角色很强。","terms_used":[],"uncertain_terms":[]}'
                         + strict_instruction
                     ),
@@ -181,6 +189,9 @@ class DeepSeekV4Translator(Translator):
                 {"role": "user", "content": json.dumps(user_payload, ensure_ascii=False)},
             ],
         }
+        if self.deepseek.thinking_enabled is not None:
+            payload["thinking"] = {"type": "enabled" if self.deepseek.thinking_enabled else "disabled"}
+        return payload
 
 
 def create_translator(config: AppConfig) -> Translator:

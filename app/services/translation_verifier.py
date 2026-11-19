@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from app.models.term import Term, VerificationResult
+from app.services.terminology_manager import has_exact_source, normalize_match_text
 
 
 class TranslationVerifier:
@@ -14,24 +15,25 @@ class TranslationVerifier:
         actions: list[str] = []
         fixed = zh_text.strip() or normalized_text.strip() or source_text.strip()
         missing: list[Term] = []
-        combined_source = f"{source_text}\n{normalized_text}".lower()
+        combined_source = normalize_match_text(normalized_text or source_text)
 
         if contains_untranslated_foreign_script(fixed):
             fixed = "（翻译未返回中文）"
             actions.append("non_chinese_translation_replaced")
 
         for term in sorted(candidate_terms, key=lambda item: item.priority, reverse=True):
+            if not has_exact_source(term, combined_source):
+                continue
             for forbidden in term.forbidden_translations:
                 if forbidden and forbidden in fixed:
                     fixed = fixed.replace(forbidden, term.zh_cn)
                     actions.append(f"forbidden_replaced:{term.id}")
 
-            source_hit = any(phrase and phrase.lower() in combined_source for phrase in term.match_phrases)
-            if source_hit and term.zh_cn not in fixed:
+            if term.zh_cn not in fixed:
                 missing.append(term)
                 fixed = f"{term.zh_cn}: {fixed}" if fixed else term.zh_cn
                 actions.append(f"required_term_inserted:{term.id}")
-            elif source_hit:
+            else:
                 actions.append(f"required_term_ok:{term.id}")
 
         if not actions:

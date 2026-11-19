@@ -37,7 +37,7 @@ button:hover {
 
 .app-shell {
   display: grid;
-  grid-template-columns: 1fr 320px;
+  grid-template-columns: 1fr 360px;
   min-height: 100vh;
 }
 
@@ -48,10 +48,52 @@ button:hover {
 }
 
 .stage video {
+  display: block;
   width: 100%;
   height: 100vh;
   object-fit: contain;
   background: #000;
+}
+
+.capture-mode .app-shell {
+  display: block;
+  overflow: hidden;
+  height: 100vh;
+}
+
+.capture-mode .panel {
+  display: none;
+}
+
+.capture-mode .stage,
+.capture-mode .stage video,
+.stage:fullscreen video {
+  height: 100%;
+}
+
+.capture-mode .stage video {
+  object-fit: cover;
+}
+
+#stage-fullscreen {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+}
+
+.stage:fullscreen #stage-fullscreen {
+  display: none;
+}
+
+.capture-mode .stage:not(:hover) #stage-fullscreen:not(:focus-visible) {
+  opacity: 0;
+  pointer-events: none;
+}
+
+#enable-capture-audio {
+  position: absolute;
+  top: 12px;
+  right: 12px;
 }
 
 #subtitle {
@@ -66,6 +108,11 @@ button:hover {
   line-height: 1.25;
   color: white;
   pointer-events: none;
+}
+
+.capture-mode #subtitle {
+  top: var(--subtitle-top, 82%);
+  width: 92%;
 }
 
 .subtitle-main,

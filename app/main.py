@@ -56,7 +56,7 @@ def create_app(config: AppConfig | None = None, config_path: str | Path = "confi
 
     @app.on_event("shutdown")
     async def shutdown() -> None:
-        pipeline.stop()
+        await pipeline.finish()
 
     @app.get("/", response_class=HTMLResponse)
     async def root() -> HTMLResponse:
@@ -146,8 +146,7 @@ def create_app(config: AppConfig | None = None, config_path: str | Path = "confi
         save_config(updated, app.state.config_path)
         app_config = updated
         app.state.config = updated
-        pipeline.stop()
-        pipeline.hls_buffer.clear_runtime_files()
+        await pipeline.finish(clear_hls=True)
         _restart_after_response(app.state.config_path)
         return {"ok": True, "message": "Configuration saved. Backend restarting."}
 
@@ -170,12 +169,13 @@ def create_app(config: AppConfig | None = None, config_path: str | Path = "confi
 
     @app.post("/api/runtime/stop")
     async def stop_runtime() -> dict:
-        pipeline.stop()
+        await pipeline.finish()
         return pipeline.status()
 
     @app.post("/api/runtime/clear-hls")
     async def clear_hls() -> dict:
-        return pipeline.clear_hls()
+        await pipeline.finish(clear_hls=True)
+        return pipeline.hls_buffer.status()
 
     @app.get("/api/subtitles/history")
     async def subtitle_history() -> list[dict]:
